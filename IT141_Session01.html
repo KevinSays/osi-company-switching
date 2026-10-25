@@ -1,0 +1,1096 @@
+<meta charset="utf-8">
+<title>IT141 Session 1 – Basic Device Configuration &amp; Switching Concepts</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/theme.css">
+<script src="assets/site.js" defer></script>
+
+<header class="masthead">
+  <div class="wrap">
+    <p class="eyebrow">IT141 · SESSION 1 · FIELD NOTES</p>
+    <h1>Basic Device Configuration &amp; Switching Concepts</h1>
+    <p class="lede">Welcome back to the OSI Company. Same building, same network, same people you met in CCNA 1, with one surprise: over the break, Infrastructure swapped out both routers. This session is the warm-up lap. You'll set up a switch and a router from scratch, lock them down with SSH, prove every link works, and take one more careful look at how Local Dispatch decides where a frame goes. Most of it is familiar on purpose. CCNA 2 moves fast after today, and today is where you get your speed back.</p>
+    <div class="factrow">
+      <span class="fact"><b>New material</b> Module 1 — Basic Device Configuration</span>
+      <span class="fact"><b>New material</b> Module 2 — Switching Concepts</span>
+      <span class="fact"><b>Next session</b> Module 3 — VLANs</span>
+    </div>
+  </div>
+</header>
+
+<nav class="index" data-pin="#flashcards #quiz" aria-label="Section index">
+  <div class="wrap">
+    <a href="index.html" class="toc-link">↩ Contents</a>
+    <a href="#overview">Overview</a>
+    <a href="#upgrade">New Routers</a>
+    <a href="#boot">Switch Boot</a>
+    <a href="#svi">Switch Management</a>
+    <a href="#ports">Switch Ports</a>
+    <a href="#ssh">SSH</a>
+    <a href="#router">Router Setup</a>
+    <a href="#verify">Verify</a>
+    <a href="#forwarding">Frame Forwarding</a>
+    <a href="#domains">Switching Domains</a>
+    <a href="#mistakes">Common Mistakes</a>
+    <a href="#ticket">The Ticket</a>
+    <a href="#checkpoint">Checkpoint</a>
+    <a href="#flashcards">Flashcards</a>
+    <a href="#quiz">Quiz</a>
+    <a href="#examples">Examples</a>
+    <a href="#glossary">Glossary</a>
+  </div>
+</nav>
+
+<main class="wrap">
+
+  <!-- OVERVIEW -->
+  <section id="overview">
+    <div class="section-head">
+      <p class="kicker">Modules 1 &amp; 2</p>
+      <h2>What Session 1 covers</h2>
+      <p>Two modules, both built on CCNA 1. Module 1 is the hands-on one: switch boot and recovery, switch management, port settings, SSH, basic router setup, and the <code>show</code> commands that prove a network works. Module 2 is short and conceptual: how a switch learns and forwards frames, and the difference between a collision domain and a broadcast domain. Module 2 also sets up next session, when the broadcast domain finally gets broken up.</p>
+    </div>
+    <div class="cold-open">
+      <p class="tag">Cold open · Local Dispatch, first day back</p>
+      <p>The Rookie comes back from break to find a new badge on the desk: <em>Dispatcher-in-Training</em>. Down the hall, the Infrastructure Crew is wheeling out the two old routers on a dolly. "Upgraded," the crew chief says. "Same jobs, new boxes, new port labels. Somebody has to set them up and make sure every hallway still connects." The Surveyor hands the Rookie a clipboard with one line on it: <em>Configure, secure, verify.</em> "You did all of this in CCNA 1," the Surveyor says. "Now do it like you'll have to do it under a clock. Because you will."</p>
+    </div>
+    <ul class="obj-list">
+      <li>Describe the switch boot sequence, set the boot image, read the switch LEDs, and recover from a crash with the boot loader</li>
+      <li>Configure a switch management SVI and default gateway</li>
+      <li>Set duplex and speed, explain auto-negotiation and auto-MDIX, and read interface error counters</li>
+      <li>Configure and verify SSH on a switch and a router</li>
+      <li>Configure basic router settings, dual-stack interfaces, and a loopback</li>
+      <li>Verify directly connected networks, filter <code>show</code> output, and use command history</li>
+      <li>Explain how a switch learns and forwards frames, and compare store-and-forward with cut-through switching</li>
+      <li>Compare collision domains with broadcast domains, and name the features that reduce congestion</li>
+    </ul>
+    <div class="teach-note">
+      <span class="label">Topology used on this page</span>
+      The network you finished CCNA 1 with, on new routers. <strong>R1</strong> and <strong>R2</strong> are Cisco ISR4321s, joined by <code>10.0.0.0/30</code> on <code>G0/0/0</code>. R1's LAN is <code>192.168.10.0/24</code>: switch <strong>S1</strong> (Catalyst 2960, management address <code>192.168.10.2</code>) and PC-A <code>192.168.10.10</code>, gateway <code>192.168.10.1</code>. R2's LAN is <code>192.168.20.0/24</code>: switch <strong>S2</strong> (<code>192.168.20.2</code>), PC-B, and SRV1 <code>192.168.20.100</code>. IPv6 uses <code>2001:db8:acad:10::/64</code> and <code>2001:db8:acad:20::/64</code>. The domain is <code>it141.example</code>. See <a href="index.html#network">the lab network</a> for what carries over and what's new.
+    </div>
+    <div class="teach-note callback">
+      <span class="label">CCNA 1 callback</span>
+      Today leans on four CCNA 1 sessions. Keep them handy if anything feels rusty: <a href="https://kevinsays.github.io/131/">Session 2</a> (switch bootup and basic switch configuration), <a href="https://kevinsays.github.io/131/">Session 5</a> (MAC tables, forwarding methods, switching domains), <a href="https://kevinsays.github.io/131/">Session 7</a> (initial router configuration), and <a href="https://kevinsays.github.io/131/">Session 11</a> (device security and SSH).
+    </div>
+  </section>
+
+  <!-- NEW ROUTERS -->
+  <section id="upgrade">
+    <div class="section-head">
+      <p class="kicker">What changed over the break</p>
+      <h2>R1 and R2 got replaced</h2>
+      <p>CCNA 1 ended on Cisco 2911 routers. This course uses the <strong>ISR4321</strong>, the router Cisco NetAcad's own Packet Tracer activities use in this course. The commands you know still work. What changes is the interface names.</p>
+    </div>
+    <table class="spec">
+      <thead><tr><th>CCNA 1 (2911)</th><th>This course (ISR4321)</th><th>Cabled to</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">G0/0</td><td class="mono"><strong>G0/0/0</strong></td><td>The other router</td></tr>
+        <tr><td class="mono">G0/1</td><td class="mono"><strong>G0/0/1</strong></td><td>The LAN switch (S1 G0/1 at R1, S2 G0/1 at R2)</td></tr>
+        <tr><td class="mono">G0/2</td><td><em>none</em></td><td>The ISR4321 has only <strong>two</strong> built-in Gigabit ports. A third link needs an add-in module; Session 11 adds a serial card.</td></tr>
+      </tbody>
+    </table>
+    <p>The ISR4321 runs <strong>IOS XE</strong>, a newer relative of the IOS on the 2911. Nearly every command you learned is the same. You can still type the short form, <code>g0/0/1</code>, anywhere; IOS XE shows the full name, <code>GigabitEthernet0/0/1</code>, in its output, including the routing table.</p>
+    <div class="teach-note">
+      <span class="label">Reading the new names</span>
+      An ISR4321 interface name has three numbers: <strong>slot / subslot / port</strong>. <code>G0/0/0</code> means slot 0, subslot 0, port 0. The two built-in Gigabit ports are <code>G0/0/0</code> and <code>G0/0/1</code>. Add-in modules show up in other subslots (later this course you'll see a serial card at <code>S0/1/0</code>). The last digit still matches the 2911, so the same cables plug into the same-numbered ports.
+    </div>
+  </section>
+
+  <!-- SWITCH BOOT -->
+  <section id="boot">
+    <div class="section-head">
+      <p class="kicker">Module 1.1</p>
+      <h2>Switch boot, LEDs, and recovery</h2>
+      <p>You saw the boot process in CCNA 1. Module 1 adds the details: which program runs when, where the switch looks for its operating system, and how to get in when that operating system is broken.</p>
+    </div>
+    <div class="teach-note callback">
+      <span class="label">CCNA 1 callback</span>
+      <a href="https://kevinsays.github.io/131/">Session 2: Switch bootup process</a> covered POST and loading the IOS. This is the same story with every step named.
+    </div>
+    <h3 class="sub">The five-step boot sequence</h3>
+    <ol class="steps">
+      <li><strong>POST.</strong> The switch runs the power-on self-test from ROM. It checks the CPU, DRAM, and the flash file system.</li>
+      <li><strong>Boot loader.</strong> The switch loads the boot loader, a small program also stored in ROM.</li>
+      <li><strong>CPU setup.</strong> The boot loader does low-level CPU initialization: it sets up the CPU registers that control where physical memory is mapped, how much memory there is, and its speed.</li>
+      <li><strong>Flash setup.</strong> The boot loader initializes the flash file system on the system board.</li>
+      <li><strong>Load the IOS.</strong> The boot loader finds and loads a default IOS image into memory and hands control to it. The IOS then applies the startup configuration, stored in flash as <code>config.text</code>.</li>
+    </ol>
+    <h3 class="sub">Which IOS? The BOOT variable</h3>
+    <p>The boot loader looks at the <strong>BOOT environment variable</strong>. If it's set, the switch loads that image. If it isn't, the switch tries to load the first executable file it can find in flash. You set the variable with <code>boot system</code> in global configuration mode.</p>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · set and check the boot image</span></div>
+      <div class="terminal-body"><span class="prompt">S1(config)#</span> <span class="cmd">boot system flash:/c2960-lanbasek9-mz.150-2.SE4.bin</span>
+<span class="prompt">S1(config)#</span> <span class="cmd">end</span>
+<span class="prompt">S1#</span> <span class="cmd">show boot</span>
+<span class="hl">BOOT path-list      : flash:/c2960-lanbasek9-mz.150-2.SE4.bin</span>
+<span class="out">Config file         : flash:/config.text</span>
+<span class="out">Private Config file : flash:/private-config.text</span>
+<span class="out">Enable Break        : no</span>
+<span class="out">Manual Boot         : no</span></div>
+    </div>
+    <div class="teach-note">
+      <span class="label">Copy the name from your own switch</span>
+      Image names differ between switches and IOS versions. Run <code>show flash:</code> first and copy the <code>.bin</code> file name exactly. <code>boot system</code> only matters when flash holds more than one image.
+    </div>
+    <h3 class="sub">Reading the LEDs</h3>
+    <p>A Catalyst 2960 has a column of system LEDs and a <strong>Mode</strong> button. Pressing Mode cycles the port LEDs between showing status, duplex, speed, and PoE.</p>
+    <table class="spec">
+      <thead><tr><th>LED</th><th>What it tells you</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">SYST</td><td>System power and health. Off = no power. Green = running normally. Amber = powered but not working properly.</td></tr>
+        <tr><td class="mono">RPS</td><td>Redundant power supply status. Off = no RPS. Green = RPS ready.</td></tr>
+        <tr><td class="mono">STAT</td><td>When lit, the port LEDs show <strong>status</strong> (the default mode). Port off = no link; green = link up; blinking green = activity; amber = port blocked to prevent a loop.</td></tr>
+        <tr><td class="mono">DUPLX</td><td>When lit, the port LEDs show <strong>duplex</strong>. Port off = half duplex; green = full duplex.</td></tr>
+        <tr><td class="mono">SPEED</td><td>When lit, the port LEDs show <strong>speed</strong>. Off = 10 Mb/s; green = 100 Mb/s; blinking green = 1000 Mb/s.</td></tr>
+        <tr><td class="mono">PoE</td><td>Shown on PoE models. When lit, the port LEDs show Power over Ethernet status.</td></tr>
+      </tbody>
+    </table>
+    <div class="teach-note preview">
+      <span class="label">Coming up in Session 4</span>
+      "Amber = port blocked to prevent a loop" is Spanning Tree at work. You'll see why a switch would ever block its own port in Module 5.
+    </div>
+    <h3 class="sub">Recovering from a system crash</h3>
+    <p>If the IOS is missing or damaged, the boot loader's own command line can still reach the files in flash:</p>
+    <ol class="steps">
+      <li>Connect a PC to the switch's console port and open a terminal emulator.</li>
+      <li>Unplug the switch's power cord.</li>
+      <li>Plug it back in and, within 15 seconds, <strong>press and hold the Mode button</strong> while the System LED is still flashing green.</li>
+      <li>Keep holding until the System LED turns briefly amber and then solid green, then let go.</li>
+      <li>The <code>switch:</code> prompt appears. You're in the boot loader.</li>
+    </ol>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · boot loader (real switch only)</span></div>
+      <div class="terminal-body"><span class="prompt">switch:</span> <span class="cmd">flash_init</span>
+<span class="out">Initializing Flash...</span>
+<span class="prompt">switch:</span> <span class="cmd">dir flash:</span>
+<span class="out">Directory of flash:/</span>
+<span class="out">    2  -rwx  4670455   c2960-lanbasek9-mz.150-2.SE4.bin</span>
+<span class="out">    3  -rwx  1919      config.text</span>
+<span class="out">    4  -rwx  616       vlan.dat</span>
+<span class="prompt">switch:</span> <span class="cmd">boot flash:/c2960-lanbasek9-mz.150-2.SE4.bin</span></div>
+    </div>
+    <div class="teach-note">
+      <span class="label">Packet Tracer can't do this one</span>
+      Packet Tracer doesn't simulate the boot loader or the Mode button. Know the steps for the exam; you'd practice them on a real switch. <code>flash_init</code> starts the flash file system, <code>dir flash:</code> lists what's there, and <code>boot</code> loads an image by hand. (The same prompt is where password recovery starts, which is beyond this course.)
+    </div>
+  </section>
+
+  <!-- SWITCH MANAGEMENT -->
+  <section id="svi">
+    <div class="section-head">
+      <p class="kicker">Module 1.1</p>
+      <h2>Switch management access</h2>
+      <p>A Layer 2 switch doesn't need an IP address to forward frames. You give it one so <em>you</em> can reach it over the network instead of standing next to it with a console cable.</p>
+    </div>
+    <p>That address goes on a <strong>switch virtual interface (SVI)</strong>: a virtual interface tied to a VLAN, not to any physical port. Two things make remote management work:</p>
+    <ul class="obj-list">
+      <li><strong>An IP address and mask on the SVI</strong>, so devices on the same LAN can reach the switch</li>
+      <li><strong>A default gateway</strong>, so the switch can answer devices on <em>other</em> networks. Without it, the switch can only talk to its own subnet.</li>
+    </ul>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · initial settings and management SVI</span></div>
+      <div class="terminal-body"><span class="prompt">Switch&gt;</span> <span class="cmd">enable</span>
+<span class="prompt">Switch#</span> <span class="cmd">configure terminal</span>
+<span class="prompt">Switch(config)#</span> <span class="cmd">hostname S1</span>
+<span class="prompt">S1(config)#</span> <span class="cmd">no ip domain-lookup</span>
+<span class="prompt">S1(config)#</span> <span class="cmd">enable secret class12345</span>
+<span class="prompt">S1(config)#</span> <span class="cmd">line console 0</span>
+<span class="prompt">S1(config-line)#</span> <span class="cmd">password cisco12345</span>
+<span class="prompt">S1(config-line)#</span> <span class="cmd">login</span>
+<span class="prompt">S1(config-line)#</span> <span class="cmd">exit</span>
+<span class="prompt">S1(config)#</span> <span class="cmd">service password-encryption</span>
+<span class="prompt">S1(config)#</span> <span class="cmd">banner motd #Authorized access only. Violators will be prosecuted.#</span>
+<span class="comment">!</span>
+<span class="comment">! Management SVI: VLAN 1 for now, on purpose. Session 2 moves it to VLAN 99.</span>
+<span class="prompt">S1(config)#</span> <span class="hl">interface vlan 1</span>
+<span class="prompt">S1(config-if)#</span> <span class="hl">ip address 192.168.10.2 255.255.255.0</span>
+<span class="prompt">S1(config-if)#</span> <span class="hl">no shutdown</span>
+<span class="out">%LINK-5-CHANGED: Interface Vlan1, changed state to up</span>
+<span class="out">%LINEPROTO-5-UPDOWN: Line protocol on Interface Vlan1, changed state to up</span>
+<span class="prompt">S1(config-if)#</span> <span class="cmd">exit</span>
+<span class="comment">!</span>
+<span class="comment">! Only needed to reach (or be managed from) other networks.</span>
+<span class="prompt">S1(config)#</span> <span class="hl">ip default-gateway 192.168.10.1</span>
+<span class="prompt">S1(config)#</span> <span class="cmd">end</span>
+<span class="prompt">S1#</span> <span class="cmd">copy running-config startup-config</span>
+<span class="out">Destination filename [startup-config]?</span>
+<span class="out">Building configuration...</span>
+<span class="out">[OK]</span></div>
+    </div>
+    <p>S2 gets the same settings with its own values: <code>hostname S2</code>, <code>ip address 192.168.20.2 255.255.255.0</code> on <code>interface vlan 1</code>, and <code>ip default-gateway 192.168.20.1</code>. S2 is still on R2's LAN this session.</p>
+    <div class="teach-note">
+      <span class="label">When does the SVI come up?</span>
+      An SVI comes up only when at least one port in its VLAN is up. Here that's F0/1 (PC-A) or G0/1 (R1). If nothing in VLAN 1 is connected, <code>show ip interface brief</code> shows <code>Vlan1 … up down</code>. Remember that symptom: it comes back in Session 2, when ports leave VLAN 1. The two <code>%LINK</code> messages print only if a VLAN 1 port is already up when you type <code>no shutdown</code>.
+    </div>
+    <div class="teach-note">
+      <span class="label">Two things the SVI address does not do</span>
+      It doesn't let the switch route. The address is for managing the switch, and a 2960 still forwards frames only at Layer 2. And if you later give the SVI an IPv6 address (a 2960 first needs the dual-ipv4-and-ipv6 SDM template and a reload), there's no IPv6 version of <code>ip default-gateway</code>: the switch learns its IPv6 gateway from the router's Router Advertisements.
+    </div>
+    <div class="teach-note preview">
+      <span class="label">Coming up in Session 2: why VLAN 1, for now</span>
+      Every switch ships with all its ports in VLAN 1, and so far that's where the management address lives too. NetAcad's advice is to manage switches from a VLAN <em>other</em> than 1, and it's right. We're leaving S1 on VLAN 1 one more session on purpose, the same choice CCNA 1 made. Next session, Module 3 builds real VLANs, and S1's management address moves to its own management VLAN.
+    </div>
+  </section>
+
+  <!-- SWITCH PORTS -->
+  <section id="ports">
+    <div class="section-head">
+      <p class="kicker">Module 1.2</p>
+      <h2>Switch ports: duplex, speed, and errors</h2>
+      <p>Most of the time a switch port just works, because both ends negotiate. This section is about the times it doesn't.</p>
+    </div>
+    <div class="teach-note callback">
+      <span class="label">CCNA 1 callback</span>
+      <a href="https://kevinsays.github.io/131/">Session 5: Switch port settings</a> introduced duplex, auto-negotiation, and auto-MDIX. Module 1 adds the commands and the error counters.
+    </div>
+    <table class="spec">
+      <thead><tr><th>Term</th><th>What it means</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Full duplex</strong></td><td>Both ends send and receive at the same time. A switch port with one device on it, running full duplex, is <strong>microsegmented</strong>: it has no collision domain at all.</td></tr>
+        <tr><td><strong>Half duplex</strong></td><td>Only one side sends at a time. Collisions are possible, so performance suffers. It's mostly a legacy (hub-era) mode.</td></tr>
+        <tr><td><strong>Auto-negotiation</strong></td><td>The default for speed and duplex on Catalyst 2960 and 3560 switches. Both ends agree on the best shared setting. At 1000 Mb/s the port runs full duplex only.</td></tr>
+        <tr><td><strong>Auto-MDIX</strong></td><td>The port detects whether it needs a straight-through or a crossover cable and adjusts, so either cable works. Without it: straight-through to PCs, servers, and routers; crossover to other switches.</td></tr>
+      </tbody>
+    </table>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · force a port, then put it back</span></div>
+      <div class="terminal-body"><span class="prompt">S1(config)#</span> <span class="cmd">interface f0/1</span>
+<span class="prompt">S1(config-if)#</span> <span class="cmd">duplex full</span>
+<span class="prompt">S1(config-if)#</span> <span class="cmd">speed 100</span>
+<span class="comment">!</span>
+<span class="comment">! Put it back. Forcing one end while the other negotiates causes a duplex mismatch.</span>
+<span class="prompt">S1(config-if)#</span> <span class="cmd">duplex auto</span>
+<span class="prompt">S1(config-if)#</span> <span class="cmd">speed auto</span>
+<span class="prompt">S1(config-if)#</span> <span class="cmd">mdix auto</span>
+<span class="prompt">S1(config-if)#</span> <span class="cmd">end</span></div>
+    </div>
+    <div class="teach-note">
+      <span class="label">Auto-MDIX needs auto on both settings</span>
+      Auto-MDIX is on by default on a 2960, and it works only when speed and duplex are both <code>auto</code>. Packet Tracer doesn't really model cable tolerance, so in Packet Tracer, still pick the right cable.
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · show interfaces f0/1 (trimmed)</span></div>
+      <div class="terminal-body"><span class="prompt">S1#</span> <span class="cmd">show interfaces f0/1</span>
+<span class="hl">FastEthernet0/1 is up, line protocol is up (connected)</span>
+<span class="out">  Hardware is Lance, address is 0001.c7a3.5e01 (bia 0001.c7a3.5e01)</span>
+<span class="out">  ...</span>
+<span class="hl">  Full-duplex, 100Mb/s</span>
+<span class="out">  ...</span>
+<span class="out">     956 packets input, 193351 bytes, 0 no buffer</span>
+<span class="hl">     Received 956 broadcasts, 0 runts, 0 giants, 0 throttles</span>
+<span class="hl">     0 input errors, 0 CRC, 0 frame, 0 overrun, 0 ignored, 0 abort</span>
+<span class="out">     2357 packets output, 263570 bytes, 0 underruns</span>
+<span class="hl">     0 output errors, 0 collisions, 10 interface resets</span>
+<span class="hl">     0 babbles, 0 late collision, 0 deferred</span></div>
+    </div>
+    <div class="teach-note">
+      <span class="label">"Hardware is Lance"?</span>
+      That line is a Packet Tracer quirk. A real 2960 says <code>Hardware is Fast Ethernet</code>. The lines that matter are the highlighted ones: status, duplex and speed, and the error counters in the table below.
+    </div>
+    <h3 class="sub">Reading the error counters</h3>
+    <p><code>show interfaces</code> first tells you whether the link is up (Layer 1: is there a carrier?) and whether the line protocol is up (Layer 2: are keepalives getting through?). Further down are counters that point at media problems:</p>
+    <table class="spec">
+      <thead><tr><th>Counter</th><th>What it means</th><th>Usual cause</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Input errors</strong></td><td>The total of all receive errors: runts, giants, CRC, no buffer, frame, overrun, and ignored</td><td>Look at the individual counters</td></tr>
+        <tr><td><strong>Runts</strong></td><td>Frames smaller than the 64-byte minimum</td><td>A bad NIC, or collisions</td></tr>
+        <tr><td><strong>Giants</strong></td><td>Frames larger than the maximum allowed size</td><td>A bad NIC, or a size mismatch between the ends</td></tr>
+        <tr><td><strong>CRC</strong></td><td>The frame's checksum doesn't match: it was damaged on the way</td><td>Electrical interference, a bad or damaged cable, or a loose connection</td></tr>
+        <tr><td><strong>Output errors</strong></td><td>The total of errors that stopped a frame from going out</td><td>Look at collisions</td></tr>
+        <tr><td><strong>Collisions</strong></td><td>Normal in half duplex. <strong>Never</strong> normal in full duplex.</td><td>Half duplex, or a duplex mismatch</td></tr>
+        <tr><td><strong>Late collisions</strong></td><td>A collision after the first 512 bits of the frame were sent</td><td>A <strong>duplex mismatch</strong>, or a cable longer than the standard allows</td></tr>
+      </tbody>
+    </table>
+    <div class="teach-note">
+      <span class="label">The troubleshooting order</span>
+      Link down? Check the cable and the far end. Link up but errors climbing? Check for noise, a bad cable, or a duplex mismatch. Line protocol down? Look at the configuration on both ends.
+    </div>
+  </section>
+
+  <!-- SSH -->
+  <section id="ssh">
+    <div class="section-head">
+      <p class="kicker">Module 1.3</p>
+      <h2>Secure remote access: SSH</h2>
+      <p>SSH on R1, S1 and S2 is a core task on this course's hands-on skills exam. It isn't new. The skill is doing it quickly and getting every step right the first time.</p>
+    </div>
+    <div class="teach-note callback">
+      <span class="label">CCNA 1 callback</span>
+      You configured SSH in <a href="https://kevinsays.github.io/131/">Session 11: Device security</a>. Same steps here, now on a switch as well as a router.
+    </div>
+    <table class="spec">
+      <thead><tr><th></th><th>Telnet</th><th>SSH</th></tr></thead>
+      <tbody>
+        <tr><td>Port</td><td class="mono">TCP 23</td><td class="mono">TCP 22</td></tr>
+        <tr><td>Login and session data</td><td>Plaintext. Anyone capturing the traffic with Wireshark can read the username and password.</td><td>Encrypted. A capture shows the addresses, but not the contents.</td></tr>
+        <tr><td>Use it?</td><td>No</td><td>Yes. Prefer version 2.</td></tr>
+      </tbody>
+    </table>
+    <p><strong>Does the switch support SSH?</strong> Only if its IOS image includes encryption features. <code>show version</code> shows the image name; look for <strong>k9</strong> in it. If <code>show ip ssh</code> isn't recognized, the image doesn't support SSH.</p>
+    <h3 class="sub">The SSH recipe</h3>
+    <ol class="steps">
+      <li>Give the device a unique hostname and working IP connectivity.</li>
+      <li>Set a domain name: <code>ip domain-name</code>.</li>
+      <li>Generate RSA keys: <code>crypto key generate rsa</code>. This also turns SSH on.</li>
+      <li>Create a local user: <code>username … secret …</code>.</li>
+      <li>On the vty lines, use the local user database (<code>login local</code>) and allow only SSH (<code>transport input ssh</code>).</li>
+      <li>Turn on version 2: <code>ip ssh version 2</code>.</li>
+    </ol>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · SSH, in order</span></div>
+      <div class="terminal-body"><span class="prompt">S1#</span> <span class="cmd">configure terminal</span>
+<span class="prompt">S1(config)#</span> <span class="hl">ip domain-name it141.example</span>
+<span class="prompt">S1(config)#</span> <span class="hl">crypto key generate rsa general-keys modulus 1024</span>
+<span class="out">The name for the keys will be: S1.it141.example</span>
+
+<span class="out">% The key modulus size is 1024 bits</span>
+<span class="out">% Generating 1024 bit RSA keys, keys will be non-exportable...[OK]</span>
+<span class="out">%SSH-5-ENABLED: SSH 1.99 has been enabled</span>
+<span class="prompt">S1(config)#</span> <span class="hl">ip ssh version 2</span>
+<span class="prompt">S1(config)#</span> <span class="hl">username admin secret admin12345</span>
+<span class="prompt">S1(config)#</span> <span class="hl">line vty 0 15</span>
+<span class="prompt">S1(config-line)#</span> <span class="hl">login local</span>
+<span class="prompt">S1(config-line)#</span> <span class="hl">transport input ssh</span>
+<span class="prompt">S1(config-line)#</span> <span class="cmd">exit</span>
+<span class="prompt">S1(config)#</span> <span class="cmd">end</span>
+<span class="prompt">S1#</span> <span class="cmd">copy running-config startup-config</span>
+<span class="prompt">S1#</span> <span class="cmd">show ip ssh</span>
+<span class="hl">SSH Enabled - version 2.0</span>
+<span class="out">Authentication timeout: 120 secs; Authentication retries: 3</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong>Why 1024 bits?</strong> SSH version 2 needs a key of at least 768 bits. 1024 matches CCNA 1 and NetAcad's labs.</li>
+      <li><strong>"SSH 1.99"</strong> means versions 1 and 2 are both allowed. <code>ip ssh version 2</code> locks it to version 2, and it needs the keys to exist first.</li>
+      <li><strong>Switch vs. router vty lines:</strong> a 2960 has 16 (<code>line vty 0 15</code>). On the ISR4321, use <code>line vty 0 4</code>.</li>
+    </ul>
+    <p>Do this after R1's basic setup in the next section: the hostname must already be R1.</p>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">R1 · SSH (same recipe, router vty lines 0–4)</span></div>
+      <div class="terminal-body"><span class="prompt">R1(config)#</span> <span class="cmd">ip domain-name it141.example</span>
+<span class="prompt">R1(config)#</span> <span class="cmd">crypto key generate rsa general-keys modulus 1024</span>
+<span class="prompt">R1(config)#</span> <span class="cmd">ip ssh version 2</span>
+<span class="prompt">R1(config)#</span> <span class="cmd">username admin secret admin12345</span>
+<span class="prompt">R1(config)#</span> <span class="cmd">line vty 0 4</span>
+<span class="prompt">R1(config-line)#</span> <span class="cmd">login local</span>
+<span class="prompt">R1(config-line)#</span> <span class="cmd">transport input ssh</span>
+<span class="prompt">R1(config-line)#</span> <span class="cmd">exit</span></div>
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">PC-A · Desktop › Command Prompt</span></div>
+      <div class="terminal-body"><span class="prompt">C:\&gt;</span> <span class="hl">ssh -l admin 192.168.10.2</span>
+
+<span class="out">Password:</span>
+
+<span class="out">Authorized access only. Violators will be prosecuted.</span>
+
+<span class="prompt">S1&gt;</span> <span class="cmd">enable</span>
+<span class="out">Password:</span>
+<span class="prompt">S1#</span></div>
+    </div>
+    <p>Test all three from PC-A: <code>ssh -l admin 192.168.10.1</code> (R1), <code>ssh -l admin 192.168.10.2</code> (S1), and <code>ssh -l admin 192.168.20.2</code> (S2, across both routers). The password doesn't echo. You land in user EXEC; <code>enable</code> takes you to privileged EXEC.</p>
+    <div class="teach-note">
+      <span class="label">On real gear</span>
+      Packet Tracer's SSH client accepts any key. A modern Windows or Linux SSH client may refuse an older IOS XE router's SHA-1 key exchange and ssh-rsa host key (a bigger RSA key doesn't fix it). CCNA 1 <a href="https://kevinsays.github.io/131/">Session 11</a> has the workaround.
+    </div>
+  </section>
+
+  <!-- ROUTER SETUP -->
+  <section id="router">
+    <div class="section-head">
+      <p class="kicker">Module 1.4</p>
+      <h2>Basic router configuration</h2>
+      <p>Routers and switches share the same IOS modes and most of the same starting commands. The difference is the interfaces: a router's job is to connect different networks, so every routed interface needs its own address and has to be turned on.</p>
+    </div>
+    <div class="teach-note callback">
+      <span class="label">CCNA 1 callback</span>
+      <a href="https://kevinsays.github.io/131/">Session 7: Initial router configuration</a>, on the new ISR4321. The one trap that hasn't changed: <strong>router interfaces are shut down by default.</strong> Switch ports aren't.
+    </div>
+    <p>For an interface to be available it needs <strong>an address</strong> (IPv4, IPv6, or both), it needs to be <strong>turned on</strong> with <code>no shutdown</code>, and, for a LAN or WAN link, something has to be <strong>connected at the other end</strong>. A <code>description</code> is optional but good practice.</p>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">R1 · basic settings, dual-stack interfaces, loopback</span></div>
+      <div class="terminal-body"><span class="prompt">Router&gt;</span> <span class="cmd">enable</span>
+<span class="prompt">Router#</span> <span class="cmd">configure terminal</span>
+<span class="prompt">Router(config)#</span> <span class="cmd">hostname R1</span>
+<span class="prompt">R1(config)#</span> <span class="cmd">no ip domain-lookup</span>
+<span class="prompt">R1(config)#</span> <span class="cmd">enable secret class12345</span>
+<span class="prompt">R1(config)#</span> <span class="cmd">line console 0</span>
+<span class="prompt">R1(config-line)#</span> <span class="cmd">password cisco12345</span>
+<span class="prompt">R1(config-line)#</span> <span class="cmd">login</span>
+<span class="prompt">R1(config-line)#</span> <span class="cmd">exit</span>
+<span class="prompt">R1(config)#</span> <span class="cmd">service password-encryption</span>
+<span class="prompt">R1(config)#</span> <span class="cmd">banner motd #Authorized access only. Violators will be prosecuted.#</span>
+<span class="comment">!</span>
+<span class="comment">! Without this the router won&#x27;t forward IPv6 or send Router Advertisements.</span>
+<span class="prompt">R1(config)#</span> <span class="hl">ipv6 unicast-routing</span>
+<span class="comment">!</span>
+<span class="prompt">R1(config)#</span> <span class="cmd">interface g0/0/0</span>
+<span class="prompt">R1(config-if)#</span> <span class="cmd">description Link to R2 G0/0/0</span>
+<span class="prompt">R1(config-if)#</span> <span class="cmd">ip address 10.0.0.1 255.255.255.252</span>
+<span class="prompt">R1(config-if)#</span> <span class="cmd">ipv6 address fe80::1 link-local</span>
+<span class="prompt">R1(config-if)#</span> <span class="cmd">ipv6 address 2001:db8:acad:ff01::1/64</span>
+<span class="prompt">R1(config-if)#</span> <span class="hl">no shutdown</span>
+<span class="prompt">R1(config-if)#</span> <span class="cmd">interface g0/0/1</span>
+<span class="prompt">R1(config-if)#</span> <span class="cmd">description LAN to S1 G0/1</span>
+<span class="prompt">R1(config-if)#</span> <span class="cmd">ip address 192.168.10.1 255.255.255.0</span>
+<span class="prompt">R1(config-if)#</span> <span class="cmd">ipv6 address fe80::1 link-local</span>
+<span class="prompt">R1(config-if)#</span> <span class="cmd">ipv6 address 2001:db8:acad:10::1/64</span>
+<span class="prompt">R1(config-if)#</span> <span class="hl">no shutdown</span>
+<span class="comment">!</span>
+<span class="comment">! The Cloud: a stand-in for the Internet. It stays on R1 all course.</span>
+<span class="prompt">R1(config-if)#</span> <span class="hl">interface loopback0</span>
+<span class="prompt">R1(config-if)#</span> <span class="cmd">description The Cloud (Internet stand-in)</span>
+<span class="prompt">R1(config-if)#</span> <span class="cmd">ip address 209.165.200.225 255.255.255.224</span>
+<span class="prompt">R1(config-if)#</span> <span class="cmd">ipv6 address fe80::1 link-local</span>
+<span class="prompt">R1(config-if)#</span> <span class="cmd">ipv6 address 2001:db8:cafe::1/64</span>
+<span class="prompt">R1(config-if)#</span> <span class="cmd">exit</span>
+<span class="comment">!</span>
+<span class="comment">! Provided routes: type them exactly. Explained in Module 15.</span>
+<span class="prompt">R1(config)#</span> <span class="cmd">ip route 192.168.20.0 255.255.255.0 10.0.0.2</span>
+<span class="prompt">R1(config)#</span> <span class="cmd">ipv6 route 2001:db8:acad:20::/64 2001:db8:acad:ff01::2</span>
+<span class="prompt">R1(config)#</span> <span class="cmd">end</span>
+<span class="prompt">R1#</span> <span class="cmd">copy running-config startup-config</span></div>
+    </div>
+    <div class="teach-note preview">
+      <span class="label">Provided routes</span>
+      R2 comes pre-built in the Packet Tracer file, with default routes pointing back at R1. The two <code>route</code> lines on R1 are provided the same way CCNA 1's Session 12 lab did it: type them exactly for now. Static routes are Module 15 (Session 11), where you'll rebuild every route on this network yourself.
+    </div>
+    <div class="teach-note">
+      <span class="label">No <code>no shutdown</code> on the loopback?</span>
+      Right: a loopback is up the moment you create it. The physical interfaces each needed <code>no shutdown</code>.
+    </div>
+    <div class="teach-note">
+      <span class="label">Why a loopback?</span>
+      A loopback interface is a logical interface inside the router. It isn't a physical port, can't be cabled to anything, and stays up as long as the router is running. That makes it a dependable address for testing and management, and later for routing protocols.
+    </div>
+  </section>
+
+  <!-- VERIFY -->
+  <section id="verify">
+    <div class="section-head">
+      <p class="kicker">Module 1.5</p>
+      <h2>Verify directly connected networks</h2>
+      <p>Configuration is half the job. The other half is proving it works, and doing it fast.</p>
+    </div>
+    <table class="spec">
+      <thead><tr><th>Command</th><th>Use it to…</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">show ip interface brief<br>show ipv6 interface brief</td><td>See every interface, its address, and its status in one screen. Your first command, every time.</td></tr>
+        <tr><td class="mono">show running-config interface <em>id</em></td><td>See exactly what's configured on one interface</td></tr>
+        <tr><td class="mono">show interfaces</td><td>See status, counters, and errors for every interface</td></tr>
+        <tr><td class="mono">show ip interface<br>show ipv6 interface</td><td>See the detailed IPv4 or IPv6 settings of an interface</td></tr>
+        <tr><td class="mono">show ip route<br>show ipv6 route</td><td>See the routing table: connected networks (<code>C</code>) and local addresses (<code>L</code>)</td></tr>
+      </tbody>
+    </table>
+    <div class="teach-note">
+      <span class="label">Your screen may differ</span>
+      Output on this page is written to match Packet Tracer as closely as we can, but MAC addresses, counters, byte counts, and timestamps will be different on your screen. Packet Tracer sometimes adds or leaves out a line, too. Read for the lines this page highlights.
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">R1 · show ip interface brief</span></div>
+      <div class="terminal-body"><span class="prompt">R1#</span> <span class="cmd">show ip interface brief</span>
+<span class="out">Interface              IP-Address      OK? Method Status                Protocol</span>
+<span class="out">GigabitEthernet0/0/0   10.0.0.1        YES manual up                    up</span>
+<span class="out">GigabitEthernet0/0/1   192.168.10.1    YES manual up                    up</span>
+<span class="out">Loopback0              209.165.200.225 YES manual up                    up</span></div>
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">R1 · show ipv6 interface brief</span></div>
+      <div class="terminal-body"><span class="prompt">R1#</span> <span class="cmd">show ipv6 interface brief</span>
+<span class="out">GigabitEthernet0/0/0   [up/up]</span>
+<span class="out">    FE80::1</span>
+<span class="out">    2001:DB8:ACAD:FF01::1</span>
+<span class="out">GigabitEthernet0/0/1   [up/up]</span>
+<span class="out">    FE80::1</span>
+<span class="out">    2001:DB8:ACAD:10::1</span>
+<span class="out">Loopback0              [up/up]</span>
+<span class="out">    FE80::1</span>
+<span class="out">    2001:DB8:CAFE::1</span></div>
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">R1 · show ip route (codes trimmed)</span></div>
+      <div class="terminal-body"><span class="prompt">R1#</span> <span class="cmd">show ip route</span>
+<span class="out">Codes: L - local, C - connected, S - static, ...</span>
+
+<span class="out">Gateway of last resort is not set</span>
+
+<span class="out">      10.0.0.0/8 is variably subnetted, 2 subnets, 2 masks</span>
+<span class="hl">C        10.0.0.0/30 is directly connected, GigabitEthernet0/0/0</span>
+<span class="hl">L        10.0.0.1/32 is directly connected, GigabitEthernet0/0/0</span>
+<span class="out">      192.168.10.0/24 is variably subnetted, 2 subnets, 2 masks</span>
+<span class="hl">C        192.168.10.0/24 is directly connected, GigabitEthernet0/0/1</span>
+<span class="hl">L        192.168.10.1/32 is directly connected, GigabitEthernet0/0/1</span>
+<span class="out">S     192.168.20.0/24 [1/0] via 10.0.0.2</span>
+<span class="out">      209.165.200.0/24 is variably subnetted, 2 subnets, 2 masks</span>
+<span class="out">C        209.165.200.224/27 is directly connected, Loopback0</span>
+<span class="out">L        209.165.200.225/32 is directly connected, Loopback0</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong>One <code>C</code> and one <code>L</code> per working interface</strong>, exactly as in CCNA 1.</li>
+      <li><strong><code>S</code></strong> is the provided route. <code>[1/0]</code> is administrative distance 1, metric 0. Explained in Module 15.</li>
+      <li><strong>"Gateway of last resort is not set"</strong>: R1 has no default route yet. That comes in Module 15 too.</li>
+      <li>The un-coded lines (<code>… is variably subnetted</code>) are headers that group routes under their classful network.</li>
+    </ul>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">R1 · show ipv6 route (codes trimmed)</span></div>
+      <div class="terminal-body"><span class="prompt">R1#</span> <span class="cmd">show ipv6 route</span>
+<span class="out">IPv6 Routing Table - default - 8 entries</span>
+<span class="out">C   2001:DB8:ACAD:10::/64 [0/0]</span>
+<span class="out">     via GigabitEthernet0/0/1, directly connected</span>
+<span class="out">L   2001:DB8:ACAD:10::1/128 [0/0]</span>
+<span class="out">     via GigabitEthernet0/0/1, receive</span>
+<span class="out">S   2001:DB8:ACAD:20::/64 [1/0]</span>
+<span class="out">     via 2001:DB8:ACAD:FF01::2</span>
+<span class="out">C   2001:DB8:ACAD:FF01::/64 [0/0]</span>
+<span class="out">     via GigabitEthernet0/0/0, directly connected</span>
+<span class="out">L   2001:DB8:ACAD:FF01::1/128 [0/0]</span>
+<span class="out">     via GigabitEthernet0/0/0, receive</span>
+<span class="out">C   2001:DB8:CAFE::/64 [0/0]</span>
+<span class="out">     via Loopback0, directly connected</span>
+<span class="out">L   2001:DB8:CAFE::1/128 [0/0]</span>
+<span class="out">     via Loopback0, receive</span>
+<span class="out">L   FF00::/8 [0/0]</span>
+<span class="out">     via Null0, receive</span></div>
+    </div>
+    <p>Eight entries: three <code>C</code>, three <code>L</code>, the provided <code>S</code>, and <code>L FF00::/8</code>, the multicast route IOS always adds. Link-local addresses never appear in the IPv6 routing table. IOS shows IPv6 addresses in uppercase, whatever case you typed.</p>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">R1 · show running-config interface g0/0/1</span></div>
+      <div class="terminal-body"><span class="prompt">R1#</span> <span class="cmd">show running-config interface g0/0/1</span>
+<span class="out">Building configuration...</span>
+
+<span class="out">Current configuration : 182 bytes</span>
+<span class="comment">!</span>
+<span class="out">interface GigabitEthernet0/0/1</span>
+<span class="out"> description LAN to S1 G0/1</span>
+<span class="out"> ip address 192.168.10.1 255.255.255.0</span>
+<span class="out"> ipv6 address FE80::1 link-local</span>
+<span class="out"> ipv6 address 2001:DB8:ACAD:10::1/64</span>
+<span class="out">end</span></div>
+    </div>
+    <div class="teach-note">
+      <span class="label">Small differences you may see</span>
+      Packet Tracer may also list a <code>Vlan1</code> line in <code>show ip interface brief</code> (ignore it), and IOS XE may add a <code>negotiation auto</code> line under the interface. Neither is something you configured.
+    </div>
+    <div class="teach-note">
+      <span class="label">C and L, again</span>
+      For every interface that's up with an address, the router adds two routes. <code>C</code> is the <strong>connected network</strong> (for example <code>192.168.10.0/24</code>). <code>L</code> is the <strong>local route</strong>: the router's own address on it, with a <code>/32</code> mask for IPv4 or <code>/128</code> for IPv6. The local route tells the router "this packet is for me."
+    </div>
+    <h3 class="sub">Filtering show output</h3>
+    <p>Long output pauses after 24 lines with <code>--More--</code>. Press Enter for one more line or the spacebar for the next page. <code>terminal length 0</code> turns the pausing off. To see only what you need, pipe the output through a filter:</p>
+    <table class="spec">
+      <thead><tr><th>Filter</th><th>Shows…</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">| section <em>text</em></td><td>The whole section that starts with the matching line (for example, everything under <code>line vty</code>)</td></tr>
+        <tr><td class="mono">| include <em>text</em></td><td>Only lines that contain the text</td></tr>
+        <tr><td class="mono">| exclude <em>text</em></td><td>Every line except the ones that contain the text</td></tr>
+        <tr><td class="mono">| begin <em>text</em></td><td>Everything from the first matching line onward</td></tr>
+      </tbody>
+    </table>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · filters</span></div>
+      <div class="terminal-body"><span class="prompt">S1#</span> <span class="cmd">show running-config | include ip default</span>
+<span class="out">ip default-gateway 192.168.10.1</span>
+<span class="prompt">S1#</span> <span class="hl">show running-config | section line vty</span>
+<span class="out">line vty 0 4</span>
+<span class="out"> login local</span>
+<span class="out"> transport input ssh</span>
+<span class="out">line vty 5 15</span>
+<span class="out"> login local</span>
+<span class="out"> transport input ssh</span>
+<span class="prompt">S1#</span> <span class="cmd">show running-config | begin line con</span>
+<span class="out">line con 0</span>
+<span class="out"> password 7 0822455D0A16544541</span>
+<span class="out"> login</span>
+<span class="out">line vty 0 4</span>
+<span class="out">...</span>
+<span class="prompt">S1#</span> <span class="cmd">terminal length 0</span>
+<span class="prompt">S1#</span> <span class="cmd">terminal history size 50</span>
+<span class="prompt">S1#</span> <span class="cmd">show history</span>
+<span class="out">  show running-config | include ip default</span>
+<span class="out">  show running-config | section line vty</span>
+<span class="out">  show running-config | begin line con</span>
+<span class="out">  terminal length 0</span>
+<span class="out">  terminal history size 50</span>
+<span class="out">  show history</span></div>
+    </div>
+    <ul class="obj-list">
+      <li>Filters are <strong>case-sensitive</strong>: <code>| include Hostname</code> matches nothing.</li>
+      <li>Notice the <code>line vty 0 15</code> you typed is stored as two blocks, <code>0 4</code> and <code>5 15</code>, with the same settings.</li>
+      <li>The <code>password 7</code> string is what <code>service password-encryption</code> did. It differs on every switch, and it's easy to reverse, which is why the enable password is a <code>secret</code>.</li>
+      <li><code>terminal history size</code> lasts only for this session. To keep it, put <code>history size</code> under the line configuration.</li>
+    </ul>
+    <h3 class="sub">Command history</h3>
+    <p>IOS remembers your recent commands. <strong>Ctrl+P</strong> or the <strong>Up arrow</strong> recalls older commands; <strong>Ctrl+N</strong> or the <strong>Down arrow</strong> goes back toward newer ones. By default the history holds the last 10 commands. <code>terminal history size</code> changes that for your current session, and <code>show history</code> lists what's stored.</p>
+  </section>
+
+  <!-- FRAME FORWARDING -->
+  <section id="forwarding">
+    <div class="section-head">
+      <p class="kicker">Module 2.1</p>
+      <h2>How Local Dispatch forwards a frame</h2>
+      <p>Every frame that enters a switch port (<strong>ingress</strong>) gets one decision: which port it leaves by (<strong>egress</strong>). The switch makes that decision from the destination MAC address and its MAC address table.</p>
+    </div>
+    <div class="teach-note callback">
+      <span class="label">CCNA 1 callback</span>
+      <a href="https://kevinsays.github.io/131/">Session 5: How the address book gets built</a> is this exact topic. Module 2 repeats it because everything in the next four sessions (VLANs, trunks, STP, EtherChannel) changes <em>how</em> this table gets used.
+    </div>
+    <h3 class="sub">Learn, then forward</h3>
+    <ol class="steps">
+      <li><strong>Learn from the source.</strong> The switch reads the frame's <em>source</em> MAC address. If it's not in the table, the switch adds it with the port it came in on. If it's already there, the switch resets its timer (5 minutes by default).</li>
+      <li><strong>Forward by the destination.</strong> The switch looks up the <em>destination</em> MAC. Known unicast: send it out that one port. Unknown unicast, broadcast, or multicast: <strong>flood</strong> it out every port except the one it came in on. A switch never sends a frame back out the port it arrived on.</li>
+    </ol>
+    <p>The MAC address table is also called the <strong>CAM table</strong> (content addressable memory), after the kind of memory that holds it.</p>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · empty the table</span></div>
+      <div class="terminal-body"><span class="prompt">S1#</span> <span class="cmd">clear mac address-table dynamic</span>
+<span class="prompt">S1#</span> <span class="cmd">show mac address-table</span>
+<span class="out">          Mac Address Table</span>
+<span class="out">-------------------------------------------</span>
+
+<span class="out">Vlan    Mac Address       Type        Ports</span>
+<span class="out">----    -----------       --------    -----</span></div>
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">PC-A · ping the gateway</span></div>
+      <div class="terminal-body"><span class="prompt">C:\&gt;</span> <span class="cmd">ping 192.168.10.1</span>
+
+<span class="out">Pinging 192.168.10.1 with 32 bytes of data:</span>
+
+<span class="out">Reply from 192.168.10.1: bytes=32 time&lt;1ms TTL=255</span>
+<span class="out">Reply from 192.168.10.1: bytes=32 time&lt;1ms TTL=255</span>
+<span class="out">Reply from 192.168.10.1: bytes=32 time&lt;1ms TTL=255</span>
+<span class="out">Reply from 192.168.10.1: bytes=32 time&lt;1ms TTL=255</span></div>
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · the table now</span></div>
+      <div class="terminal-body"><span class="prompt">S1#</span> <span class="cmd">show mac address-table</span>
+<span class="out">          Mac Address Table</span>
+<span class="out">-------------------------------------------</span>
+
+<span class="out">Vlan    Mac Address       Type        Ports</span>
+<span class="out">----    -----------       --------    -----</span>
+
+<span class="hl">   1    0002.4a6c.1e02    DYNAMIC     Gi0/1</span>
+<span class="hl">   1    0060.5c3b.a801    DYNAMIC     Fa0/1</span></div>
+    </div>
+    <ol class="steps">
+      <li>PC-A's ARP request (a broadcast) arrives on Fa0/1. S1 <strong>learns</strong> PC-A's MAC on Fa0/1 and <strong>floods</strong> the broadcast.</li>
+      <li>R1's ARP reply arrives on Gi0/1. S1 learns R1's MAC on Gi0/1 and forwards the reply out Fa0/1 only.</li>
+      <li>Every ping after that is <strong>forwarded</strong> port to port. No more flooding.</li>
+    </ol>
+    <div class="teach-note">
+      <span class="label">Match it to your screen</span>
+      Your MAC addresses will differ. Check them yourself: PC-A's with <code>ipconfig /all</code>, R1's with <code>show interfaces g0/0/1</code>. If the "empty" table already has R1 in it, that's normal: R1's own periodic traffic (CDP, for one) can refill it within seconds. TTL=255 is the router replying; a Windows PC would reply with 128. In Packet Tracer the first ping sometimes times out while ARP resolves.
+    </div>
+
+    <div class="tool" id="dispatchTool">
+      <p class="tool-title">Drill · You are the switch</p>
+      <p style="margin:0 0 10px; font-size:.9rem;">A four-port switch, hosts A–D, one host per port. The table starts empty. For each frame, decide what the switch does. Then watch the table update.</p>
+      <div class="sorter-case" id="dtCase"></div>
+      <div class="sorter-btns" id="dtBtns"></div>
+      <div class="tool-out" id="dtOut"></div>
+      <table class="spec" style="margin-top:12px;">
+        <thead><tr><th>MAC address table</th><th>Port</th></tr></thead>
+        <tbody id="dtTable"></tbody>
+      </table>
+      <div class="toolbar" style="margin:12px 0 0;">
+        <button class="btn" id="dtNext">Next frame</button>
+        <button class="btn" id="dtReset">Power-cycle the switch</button>
+        <span id="dtScore" style="font-family:var(--mono); font-size:.85rem; opacity:.75;"></span>
+      </div>
+    </div>
+
+    <h3 class="sub">Store-and-forward vs. cut-through</h3>
+    <table class="spec">
+      <thead><tr><th></th><th>Store-and-forward</th><th>Cut-through</th></tr></thead>
+      <tbody>
+        <tr><td>When it forwards</td><td>After receiving the <strong>whole</strong> frame</td><td>As soon as it has read the <strong>destination MAC</strong></td></tr>
+        <tr><td>Error checking</td><td>Checks the FCS (CRC) and drops bad frames</td><td>No FCS check, so it can pass damaged frames along</td></tr>
+        <tr><td>Different port speeds</td><td>Yes: it buffers the frame, so a 1 Gb/s port can feed a 100 Mb/s port</td><td>No</td></tr>
+        <tr><td>Latency</td><td>Higher</td><td>Very low. Used where latency must stay under about 10 microseconds.</td></tr>
+        <tr><td>Notes</td><td><strong>Cisco's preferred method</strong></td><td><strong>Fragment-free</strong> is a variant: it waits for the first 64 bytes, which filters out runts (most collision fragments) before forwarding</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- SWITCHING DOMAINS -->
+  <section id="domains">
+    <div class="section-head">
+      <p class="kicker">Module 2.2</p>
+      <h2>Collision domains and broadcast domains</h2>
+      <p>Two kinds of "who gets affected." Switches fixed the first one years ago. The second one is next session's whole story.</p>
+    </div>
+    <div class="teach-note callback">
+      <span class="label">CCNA 1 callback</span>
+      <a href="https://kevinsays.github.io/131/">Session 5: Collision domains vs. broadcast domains</a>. And if you read <a href="https://kevinsays.github.io/131/">The Zoning Office</a>: the villain called <strong>The Sprawl</strong> was one giant broadcast domain. It's still out there.
+    </div>
+    <table class="spec">
+      <thead><tr><th></th><th>Collision domain</th><th>Broadcast domain</th></tr></thead>
+      <tbody>
+        <tr><td>Who's in it</td><td>Devices that share a half-duplex segment and can collide with each other</td><td>Every device that receives a broadcast frame from any of the others</td></tr>
+        <tr><td>What ends it</td><td>A switch port running <strong>full duplex</strong>. Each full-duplex port has no collision domain at all.</td><td>Only a <strong>Layer 3 device</strong>, such as a router. Switches flood broadcasts out every port.</td></tr>
+        <tr><td>When it comes back</td><td>If a link falls back to half duplex (for example, a failed auto-negotiation)</td><td>It grows every time you add a switch or hosts to the LAN</td></tr>
+        <tr><td>Why it matters</td><td>Collisions mean retransmissions and wasted bandwidth</td><td>Too many broadcasts congest the network and make every host stop to process frames that weren't for it</td></tr>
+      </tbody>
+    </table>
+    <h3 class="sub">How switches reduce congestion</h3>
+    <ul class="obj-list">
+      <li><strong>Fast port speeds</strong>: up to 100 Gb/s on some models</li>
+      <li><strong>Fast internal switching</strong>: a fast internal bus or shared memory</li>
+      <li><strong>Large frame buffers</strong>: room to hold frames during a burst</li>
+      <li><strong>High port density</strong>: more devices per switch, with less traffic crossing between switches</li>
+    </ul>
+    <div class="teach-note preview">
+      <span class="label">Coming up in Session 2: The Sprawl is back</span>
+      Right now S1 has one broadcast domain. Every PC you plug into it hears every ARP request and every DHCP broadcast from every other PC. In CCNA 1 the only way to split a broadcast domain was a router. Next session, Module 3 shows a second way: <strong>VLANs</strong>, which split one switch into several separate broadcast domains.
+    </div>
+  </section>
+
+  <!-- MISTAKES -->
+  <section id="mistakes">
+    <div class="section-head">
+      <p class="kicker">Watch for this</p>
+      <h2>Common Module 1–2 mistakes</h2>
+      <p>Each one has a symptom you can spot.</p>
+    </div>
+    <h3 class="sub">1 · Keys before a domain name</h3>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1</span></div>
+      <div class="terminal-body"><span class="prompt">S1(config)#</span> <span class="cmd">crypto key generate rsa general-keys modulus 1024</span>
+<span class="hl">% Please define a domain-name first.</span></div>
+    </div>
+    <p>Fix: <code>ip domain-name it141.example</code>, then generate the keys. The hostname must not be the default, either.</p>
+    <h3 class="sub">2 · <code>ip ssh version 2</code> before the keys</h3>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1</span></div>
+      <div class="terminal-body"><span class="prompt">S1(config)#</span> <span class="cmd">ip ssh version 2</span>
+<span class="hl">Please create RSA keys to enable SSH (and of atleast 768 bits for SSH v2).</span></div>
+    </div>
+    <p>Fix: generate a key of 768 bits or more, then repeat the command. ("atleast" really is spelled that way in IOS.)</p>
+    <h3 class="sub">3 · <code>login</code> instead of <code>login local</code></h3>
+    <p>With plain <code>login</code>, the vty lines want a line password, not your username, so SSH logins fail. With <code>login local</code> but no <code>username</code> command, every login fails because the user list is empty. The symptom in the PC is the <code>Password:</code> prompt repeating until the connection closes.</p>
+    <h3 class="sub">4 · The SVI is down: two different reasons</h3>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1</span></div>
+      <div class="terminal-body"><span class="prompt">S1#</span> <span class="cmd">show ip interface brief | include Vlan1</span>
+<span class="hl">Vlan1                  192.168.10.2    YES manual administratively down down</span></div>
+    </div>
+    <p><strong>administratively down</strong>: you forgot <code>no shutdown</code> on <code>interface vlan 1</code>.</p>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1</span></div>
+      <div class="terminal-body"><span class="prompt">S1#</span> <span class="cmd">show ip interface brief | include Vlan1</span>
+<span class="hl">Vlan1                  192.168.10.2    YES manual up                    down</span></div>
+    </div>
+    <p><strong>up / down</strong>: the SVI is enabled, but no port in VLAN 1 is up. Check that PC-A or R1 is connected and on.</p>
+    <h3 class="sub">5 · No default gateway on S2</h3>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">PC-A</span></div>
+      <div class="terminal-body"><span class="prompt">C:\&gt;</span> <span class="cmd">ssh -l admin 192.168.20.2</span>
+<span class="hl">% Connection timed out; remote host not responding</span></div>
+    </div>
+    <p>The clue: from PC-B, on S2's own LAN, SSH to S2 works. S2 can answer its own subnet but can't send replies anywhere else. <code>show running-config | include default</code> on S2 shows nothing. Fix: <code>ip default-gateway 192.168.20.1</code>. Compare: if SSH weren't set up at all, you'd see <em>connection refused</em>. <strong>Refused</strong> means the device answered and said no; <strong>timed out</strong> means no answer ever came back.</p>
+    <h3 class="sub">6 · An IP address on a switch port</h3>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1</span></div>
+      <div class="terminal-body"><span class="prompt">S1(config)#</span> <span class="cmd">interface f0/1</span>
+<span class="prompt">S1(config-if)#</span> <span class="cmd">ip address 192.168.10.2 255.255.255.0</span>
+<span class="out">                  ^</span>
+<span class="hl">% Invalid input detected at &#x27;^&#x27; marker.</span></div>
+    </div>
+    <p>A 2960 is a Layer 2 switch: IP addresses go on SVIs (<code>interface vlan 1</code>), never on physical ports.</p>
+  </section>
+
+  <!-- THE TICKET -->
+  <section id="ticket">
+    <div class="section-head">
+      <p class="kicker">Recurring segment</p>
+      <h2>The Ticket</h2>
+      <p>Real work orders don't come as step-by-step lists, and neither does this course's skills exam. Each session ends with a ticket. Turn it into steps <em>before</em> you open Packet Tracer.</p>
+    </div>
+    <div class="ticket-card">
+      <p class="tag">Ticket #141-01 · Priority: normal · From: the NOC</p>
+      <p>New routers are in. Need to manage R1 and both switches from my desk (PC-A). No Telnet. Make sure everything still pings. Leave a warning banner. Thanks.</p>
+    </div>
+    <details class="solution"><summary>One way to break it down</summary><div class="solbody">
+      <ol>
+        <li><strong>"Manage from my desk"</strong>: every device needs a reachable address. S1 and S2 need an SVI address and a default gateway (S2 is on R2's network, so without a gateway it can't answer PC-A).</li>
+        <li><strong>"No Telnet"</strong>: SSH on R1, S1, and S2. Domain name, RSA keys, local user, <code>login local</code>, <code>transport input ssh</code>, version 2.</li>
+        <li><strong>"Still pings"</strong>: <code>show ip interface brief</code> on each device, then ping each management address from PC-A, then actually SSH to each one.</li>
+        <li><strong>"Warning banner"</strong>: <code>banner motd</code> on all three.</li>
+        <li><strong>Unstated but expected</strong>: secret (not plain) enable password, <code>service password-encryption</code>, and <code>copy running-config startup-config</code> on every device.</li>
+      </ol>
+    </div></details>
+  </section>
+
+  <!-- CHECKPOINT -->
+  <section id="checkpoint">
+    <div class="section-head">
+      <p class="kicker">Before Session 2</p>
+      <h2>Checkpoint: Modules 1–2</h2>
+      <p>If you can do these cold, you're ready for VLANs.</p>
+    </div>
+    <ul class="obj-list">
+      <li><strong>Module 1:</strong> the five boot steps in order, what the BOOT variable does, and the crash-recovery sequence</li>
+      <li><strong>Module 1:</strong> a switch SVI and default gateway from memory, and why the gateway matters</li>
+      <li><strong>Module 1:</strong> runts, giants, CRC errors, collisions, and late collisions, and what causes each</li>
+      <li><strong>Module 1:</strong> SSH on a switch and a router from memory, all six steps, in under five minutes</li>
+      <li><strong>Module 1:</strong> a dual-stack router interface, a loopback, and reading <code>C</code> and <code>L</code> routes</li>
+      <li><strong>Module 1:</strong> the four <code>show</code> filters and <code>terminal length 0</code></li>
+      <li><strong>Module 2:</strong> learn-then-forward, flooding, store-and-forward vs. cut-through vs. fragment-free. Practice with <a href="#dispatchTool">You are the switch</a>.</li>
+      <li><strong>Module 2:</strong> what ends a collision domain, and what ends a broadcast domain</li>
+    </ul>
+  </section>
+
+  <!-- FLASHCARDS -->
+  <section id="flashcards">
+    <div class="section-head">
+      <p class="kicker">Study</p>
+      <h2>Flashcards</h2>
+      <p>Click to flip. Double-click to mark as known.</p>
+    </div>
+    <div class="toolbar">
+      <button class="btn" id="shuffleBtn">Shuffle</button>
+      <button class="btn" id="resetKnownBtn">Reset progress</button>
+      <span id="cardProgress"></span>
+    </div>
+    <div class="card-grid" id="cardGrid"></div>
+  </section>
+
+  <!-- QUIZ -->
+  <section id="quiz">
+    <div class="section-head">
+      <p class="kicker">Check yourself</p>
+      <h2>Sample questions</h2>
+      <p>Pick an answer to see if you're right. Same style as the module-group exam.</p>
+    </div>
+    <div id="quizScore"></div>
+    <div id="quizList"></div>
+    <button class="btn" id="resetQuizBtn">Reset quiz</button>
+  </section>
+
+  <!-- EXAMPLES -->
+  <section id="examples">
+    <div class="section-head">
+      <p class="kicker">Applied</p>
+      <h2>Worked examples</h2>
+      <p>Think it through before you expand the answer.</p>
+    </div>
+
+    <div class="example">
+      <span class="tag">Error counters</span>
+      <h3>Late collisions on a full-duplex PC</h3>
+      <p>A user on S1 F0/5 says the network is slow. <code>show interfaces f0/5</code> on S1 shows the port at half duplex, 100 Mb/s, with late collisions climbing. The user's PC is hard-set to 100 Mb/s full duplex. What's going on, and what's the fix?</p>
+      <details class="solution"><summary>Show answer</summary><div class="solbody">
+        <p>A <strong>duplex mismatch</strong>. The PC is hard-set, so it doesn't take part in auto-negotiation. The switch port can still sense the speed, but it can't learn the duplex, so it falls back to <strong>half duplex</strong>. The PC sends whenever it likes (full duplex), and the switch sees that as collisions. Because the collisions come late in the frame, they show up as late collisions. Fix: set both ends to auto (best), or hard-set both to the same speed <em>and</em> duplex.</p>
+      </div></details>
+    </div>
+
+    <div class="example">
+      <span class="tag">Switch management</span>
+      <h3>Pings from S1's LAN work, but not from across the router</h3>
+      <p>S2 (<code>192.168.20.2</code>, on R2's LAN) answers pings from PC-B, which is on the same LAN. From PC-A, across R1 and R2, pings to S2 fail, even though PC-A can ping PC-B. What's missing on S2?</p>
+      <details class="solution"><summary>Show answer</summary><div class="solbody">
+        <p>S2's <strong>default gateway</strong>. The ping reaches S2 fine, but S2 has no idea how to send the reply to <code>192.168.10.10</code>, which isn't on its own subnet. Fix: <code>ip default-gateway 192.168.20.1</code> on S2. PC-B works because it's on the same subnet, so no gateway is needed. It's also a classic reason "SSH to S2" fails under exam pressure.</p>
+      </div></details>
+    </div>
+
+    <div class="example">
+      <span class="tag">SSH</span>
+      <h3>"SSH Disabled - version 1.99"?</h3>
+      <p>You type <code>transport input ssh</code> and <code>login local</code> on S1's vty lines and create a user, but PC-A's SSH attempt is refused, and <code>show ip ssh</code> says SSH is disabled. Which step did you skip, and what does it depend on?</p>
+      <details class="solution"><summary>Show answer</summary><div class="solbody">
+        <p>The <strong>RSA keys</strong>. SSH turns on only when <code>crypto key generate rsa</code> runs, and that command needs a <strong>hostname</strong> other than the default and an <strong>ip domain-name</strong> first. The key is named after both (for example <code>S1.it141.example</code>). Run <code>ip domain-name it141.example</code>, then <code>crypto key generate rsa</code>, then <code>ip ssh version 2</code>.</p>
+      </div></details>
+    </div>
+
+    <div class="example">
+      <span class="tag">Frame forwarding</span>
+      <h3>Who gets the frame?</h3>
+      <p>S1's MAC table has PC-A on F0/1 and R1 on G0/1, and nothing else. A brand-new PC on F0/7 sends a frame to PC-A. Then PC-A replies. What does S1 do with each frame, and what's in the table afterward?</p>
+      <details class="solution"><summary>Show answer</summary><div class="solbody">
+        <p><strong>Frame 1</strong> (new PC → PC-A): S1 learns the new PC's MAC on F0/7. PC-A's MAC is known, so S1 forwards out <strong>F0/1 only</strong>. No flooding. <strong>Frame 2</strong> (PC-A → new PC): S1 refreshes PC-A's timer on F0/1. The new PC's MAC was just learned, so S1 forwards out <strong>F0/7 only</strong>. The table now holds three entries: F0/1, F0/7, G0/1.</p>
+      </div></details>
+    </div>
+
+    <div class="example">
+      <span class="tag">Switching domains</span>
+      <h3>Count the domains</h3>
+      <p>R1's G0/0/1 connects to S1. Six PCs plug into S1, all full duplex. R1's G0/0/0 connects to R2, and R2's LAN has S2 with four PCs, also full duplex. How many broadcast domains are there? How many collision domains?</p>
+      <details class="solution"><summary>Show answer</summary><div class="solbody">
+        <p><strong>Broadcast domains: 3.</strong> R1's LAN, the R1–R2 link, and R2's LAN. Each router interface ends one. <strong>Collision domains: 0.</strong> Every link is full duplex, so none of them has a collision domain. (Exam-style counting questions usually count every switch port and router link as its own collision domain anyway. Counted that way, this network has 13: R1–S1, six PCs, R1–R2, R2–S2, and four PCs.)</p>
+      </div></details>
+    </div>
+  </section>
+
+  <!-- GLOSSARY -->
+  <section id="glossary">
+    <div class="section-head">
+      <p class="kicker">Reference</p>
+      <h2>Glossary &amp; index</h2>
+      <p>Every term from this session. Search, or jump by letter.</p>
+    </div>
+    <input type="text" id="glossarySearch" placeholder="Search terms…" aria-label="Search glossary">
+    <div class="alpha-nav" id="alphaNav"></div>
+    <dl class="glossary" id="glossaryList"></dl>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>IT141 · CCNA: Switching, Routing, and Wireless Essentials · Session 1 reference.</p>
+    <p class="license-note">© 2026 Zan Dick (<a href="https://github.com/KevinSays/osi-company-switching">KevinSays</a>), Mountwest Community &amp; Technical College · Content: <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/">CC BY-NC-SA 4.0</a> · Code: <a href="https://github.com/KevinSays/osi-company-switching/blob/main/LICENSE">MIT</a> · Cisco, NetAcad, CCNA and Packet Tracer are trademarks of Cisco; this site is not affiliated with or endorsed by Cisco.</p>
+  </div>
+</footer>
+
+<button id="backToTop" class="back-to-top" aria-label="Back to top" title="Back to top">↑</button>
+
+<script>
+  /* ---- you are the switch ---- */
+  (function(){
+    const HOSTS = ['A','B','C','D'];              // host X sits on port index+1
+    const MAC = {A:'000A.AAAA.0001', B:'000B.BBBB.0002', C:'000C.CCCC.0003', D:'000D.DDDD.0004'};
+    const caseEl = document.getElementById('dtCase'), btns = document.getElementById('dtBtns'),
+          out = document.getElementById('dtOut'), tbl = document.getElementById('dtTable'),
+          scoreEl = document.getElementById('dtScore');
+    let table = {}, frame = null, right = 0, done = 0, n = 0;
+    function port(h){ return HOSTS.indexOf(h) + 1; }
+    function drawTable(){
+      const rows = Object.keys(table).sort();
+      tbl.innerHTML = rows.length
+        ? rows.map(h => `<tr><td class="mono">${MAC[h]} (${h})</td><td class="mono">Fa0/${table[h]}</td></tr>`).join('')
+        : '<tr><td colspan="2" style="opacity:.6;">(empty)</td></tr>';
+    }
+    function newFrame(){
+      const src = HOSTS[Math.floor(Math.random()*4)];
+      let dst;
+      if (Math.random() < 0.2) dst = 'FFFF';
+      else { do { dst = HOSTS[Math.floor(Math.random()*4)]; } while (dst === src); }
+      frame = {src, dst};
+    }
+    function answer(){
+      // the right action, judged against the table BEFORE this frame is learned
+      if (frame.dst === 'FFFF') return {k:'flood', why:'A broadcast (FFFF.FFFF.FFFF) is always flooded out every port except the one it came in on.'};
+      if (table[frame.dst] === undefined) return {k:'flood', why:`${frame.dst}'s MAC isn't in the table yet, so it's an unknown unicast: flood out every port except Fa0/${port(frame.src)}.`};
+      return {k:'p' + table[frame.dst], why:`${frame.dst}'s MAC is in the table on Fa0/${table[frame.dst]}, so the switch forwards out that one port.`};
+    }
+    function show(){
+      n++;
+      newFrame();
+      const d = frame.dst === 'FFFF' ? 'FFFF.FFFF.FFFF (broadcast)' : `${MAC[frame.dst]} (host ${frame.dst})`;
+      caseEl.innerHTML = `<span class="count">Frame ${n}</span>Arrives on <strong>Fa0/${port(frame.src)}</strong> from host ${frame.src} (${MAC[frame.src]}), destined for ${d}.`;
+      out.innerHTML = '';
+      btns.innerHTML = '';
+      delete btns.dataset.done;
+      const opts = [['flood','Flood'], ['p1','Forward Fa0/1'], ['p2','Forward Fa0/2'], ['p3','Forward Fa0/3'], ['p4','Forward Fa0/4']];
+      const ans = answer();
+      opts.forEach(([k, label]) => {
+        const b = document.createElement('button');
+        b.className = 'choice'; b.textContent = label;
+        b.addEventListener('click', () => {
+          if (btns.dataset.done) return;
+          btns.dataset.done = '1'; done++;
+          if (k === ans.k) right++;
+          Array.from(btns.children).forEach((el, i) => {
+            el.disabled = true;
+            if (opts[i][0] === ans.k) el.classList.add('correct');
+            else if (opts[i][0] === k) el.classList.add('incorrect');
+          });
+          const learned = table[frame.src] === undefined
+            ? `It also <strong>learns</strong> ${frame.src}'s MAC on Fa0/${port(frame.src)}.`
+            : `${frame.src}'s MAC was already known on Fa0/${port(frame.src)}, so its timer is reset.`;
+          table[frame.src] = port(frame.src);
+          out.innerHTML = `<div class="row"><b>${k === ans.k ? 'Right' : 'Not quite'}</b><span>${ans.why} ${learned}</span></div>`;
+          scoreEl.textContent = `${right} / ${done} right`;
+          drawTable();
+        });
+        btns.appendChild(b);
+      });
+    }
+    document.getElementById('dtNext').addEventListener('click', () => {
+      // a skipped frame still teaches the switch its source address
+      if (!btns.dataset.done) { table[frame.src] = port(frame.src); drawTable(); }
+      show();
+    });
+    document.getElementById('dtReset').addEventListener('click', () => {
+      table = {}; right = 0; done = 0; n = 0; scoreEl.textContent = 'Table cleared'; drawTable(); show();
+    });
+    drawTable(); show();
+  })();
+
+  const TERMS = [
+    {t:"Auto-MDIX", d:"Automatic medium-dependent interface crossover. The port detects whether a straight-through or crossover cable is needed and adjusts, so either kind works."},
+    {t:"Auto-negotiation", d:"Both ends of a link agree on the best shared speed and duplex. The default on Catalyst 2960 and 3560 ports. A port at 1000 Mb/s runs full duplex only."},
+    {t:"BOOT environment variable", d:"Tells the boot loader which IOS image to load. Set with boot system. If it's not set, the switch loads the first executable file it finds in flash."},
+    {t:"Boot loader", d:"A small program in ROM that runs right after POST. It initializes the CPU and flash, then loads the IOS. Its switch: prompt is used for crash recovery."},
+    {t:"Broadcast domain", d:"Every device that receives a broadcast from any of the others. Switches flood broadcasts; only a Layer 3 device (or, next session, a VLAN) ends a broadcast domain."},
+    {t:"CAM table", d:"Content addressable memory table: another name for the switch's MAC address table."},
+    {t:"Collision domain", d:"Devices on a shared half-duplex segment that can collide. A full-duplex switch port has no collision domain."},
+    {t:"CRC error", d:"A frame whose checksum (FCS) doesn't match: it was damaged in transit. Usually interference, a bad cable, or a loose connection."},
+    {t:"Cut-through switching", d:"Forwards a frame as soon as the destination MAC is read. Very low latency, but no FCS check and no support for different port speeds."},
+    {t:"Default gateway (switch)", d:"Set with ip default-gateway. Lets a switch reply to management traffic from other networks. Without it, the switch can only talk to its own subnet."},
+    {t:"Duplex mismatch", d:"One end of a link at full duplex, the other at half. Symptoms: slow link, collisions and late collisions on the half-duplex side."},
+    {t:"Egress", d:"Leaving an interface. The port a switch sends a frame out of."},
+    {t:"Flooding", d:"Sending a frame out every port except the one it arrived on. Done for broadcasts, multicasts, and unknown unicast destinations."},
+    {t:"Fragment-free", d:"A cut-through variant that waits for the first 64 bytes before forwarding, which filters out runts (most collision fragments)."},
+    {t:"Full duplex", d:"Both ends send and receive at the same time. Requires a point-to-point link such as a switch port with one device."},
+    {t:"Giant", d:"A frame larger than the maximum allowed size. Usually a bad NIC."},
+    {t:"Half duplex", d:"Only one end sends at a time. Collisions are possible. Mostly a legacy, hub-era mode."},
+    {t:"Ingress", d:"Entering an interface. The port a frame arrives on."},
+    {t:"ISR4321", d:"The Cisco router used in this course's Packet Tracer activities. Interfaces are named slot/subslot/port, such as G0/0/0 and G0/0/1."},
+    {t:"k9", d:"Part of a Cisco IOS image name that means the image includes encryption features. Needed for SSH."},
+    {t:"Late collision", d:"A collision after the first 512 bits of a frame have been sent. Usually a duplex mismatch, or a cable that's too long."},
+    {t:"Local route (L)", d:"A routing-table entry for the router's own address on an interface, with a /32 (IPv4) or /128 (IPv6) mask."},
+    {t:"Loopback interface", d:"A logical interface inside a router that stays up as long as the router runs. Can't be cabled. Used for testing, management, and routing protocols."},
+    {t:"MAC address table", d:"The switch's list of MAC addresses and the port each one was learned on. Built from source addresses; used to forward by destination address."},
+    {t:"Microsegmentation", d:"One device per switch port, running full duplex, so the port has no collision domain."},
+    {t:"Mode button", d:"The button on a Catalyst switch that cycles the port LEDs between status, duplex, speed, and PoE. Held during power-up to reach the boot loader."},
+    {t:"POST", d:"Power-on self-test. Runs from ROM at power-up and checks the CPU, DRAM, and flash file system."},
+    {t:"Runt", d:"A frame smaller than the 64-byte minimum. Usually a bad NIC or collisions."},
+    {t:"SSH", d:"Secure Shell. Encrypted remote management on TCP port 22. Needs a hostname, domain name, RSA keys, and a local user with login local on the vty lines."},
+    {t:"Store-and-forward switching", d:"Receives the whole frame and checks the FCS before forwarding. Drops damaged frames and buffers for different port speeds. Cisco's preferred method."},
+    {t:"SVI", d:"Switch virtual interface: a virtual interface for a VLAN. On a Layer 2 switch, it holds the management IP address."},
+    {t:"Telnet", d:"Remote management on TCP port 23. Sends everything, including passwords, in plaintext. Replace it with SSH."},
+    {t:"terminal length 0", d:"Stops IOS from pausing long output with --More--."},
+  ];
+
+  const QUIZ = [
+    { q:"What happens immediately after a Cisco switch completes POST?",
+      choices:["The IOS applies config.text","The boot loader is loaded from ROM","The flash file system is initialized","The BOOT variable is set"], correct:1,
+      explain:"POST runs first, then the switch loads the boot loader from ROM. The boot loader then initializes the CPU and flash and loads the IOS." },
+    { q:"A switch has no BOOT environment variable set. What does it do at startup?",
+      choices:["It stays at the switch: prompt","It loads the IOS from a TFTP server","It loads the first executable file it can find in flash","It loads the most recent IOS image by date"], correct:2,
+      explain:"Without a BOOT variable, the boot loader tries to load the first executable image it finds in flash." },
+    { q:"An administrator in another building can ping PCs on S1's LAN but can't reach S1's management address. S1's SVI is up with the right address. What's most likely missing?",
+      choices:["ip routing","A default gateway on S1","The no shutdown command on S1's ports","An IPv6 address on the SVI"], correct:1,
+      explain:"Without ip default-gateway, S1 can't send replies to devices on other networks. Hosts on its own subnet can still reach it." },
+    { q:"Which counter on a full-duplex switch port should always be zero?",
+      choices:["Collisions","Input packets","Broadcasts","Output packets"], correct:0,
+      explain:"Collisions are normal only in half duplex. Any collisions on a full-duplex port point to a duplex mismatch." },
+    { q:"A switch port shows late collisions climbing. What are the two most likely causes? (Pick the best answer.)",
+      choices:["A bad NIC and an IOS bug","A wrong VLAN and a missing gateway","Too many broadcasts and a full MAC table","A duplex mismatch and an over-length cable"], correct:3,
+      explain:"Late collisions (after the first 512 bits) are classic signs of a duplex mismatch or a cable longer than the standard allows." },
+    { q:"Which step must come before crypto key generate rsa will work?",
+      choices:["transport input ssh","ip ssh version 2","Setting a hostname and an ip domain-name","username admin secret"], correct:2,
+      explain:"The RSA key is named from the hostname and domain name, so both must be set first. The username and vty-line steps can come before or after, but ip ssh version 2 needs the keys to exist first." },
+    { q:"What does an IOS filename containing \"k9\" tell you?",
+      choices:["The image supports encryption, so SSH is possible","The image is for a 9000-series switch","The image is 9 MB or smaller","The image supports nine VLANs"], correct:0,
+      explain:"k9 marks a cryptographic image. Without it, there's no SSH." },
+    { q:"After configuring 192.168.10.1/24 on R1 G0/0/1 and bringing it up, which two routes appear for it in show ip route?",
+      choices:["S 192.168.10.0/24 and C 192.168.10.1/32","C 192.168.10.0/24 and L 192.168.10.1/32","L 192.168.10.0/24 and C 192.168.10.1/24","C 192.168.10.0/24 only"], correct:1,
+      explain:"C is the connected network. L is the local route for the router's own address, with a /32 mask." },
+    { q:"Which show filter displays the whole line vty block of the running configuration?",
+      choices:["| include line vty","| begin line vty","| exclude line vty","| section line vty"], correct:3,
+      explain:"section shows the matching line plus everything indented under it. include shows only matching lines; begin shows everything from the match to the end of the output." },
+    { q:"A switch receives a unicast frame whose destination MAC isn't in its MAC address table. What does it do?",
+      choices:["Floods it out every port except the one it arrived on","Drops it","Sends it to the default gateway","Sends an ARP request for the MAC"], correct:0,
+      explain:"An unknown unicast is flooded, just like a broadcast. When the destination replies, the switch learns its port." },
+    { q:"Which switching method checks the FCS and can handle ports of different speeds?",
+      choices:["Cut-through","Fragment-free","Store-and-forward","Fast-forward"], correct:2,
+      explain:"Store-and-forward receives the whole frame, checks the FCS, and buffers it, so it can move frames between ports of different speeds. It's Cisco's preferred method." },
+    { q:"What does a router do with a broadcast frame it receives on its LAN interface?",
+      choices:["Forwards it out all its other interfaces","Processes it if needed, but does not forward it to other networks","Floods it back onto the same LAN","Converts it into a unicast to the default gateway"], correct:1,
+      explain:"Routers end broadcast domains. A router may process a broadcast (an ARP request for its own address, for example) but never passes it to another network." },
+  ];
+</script>

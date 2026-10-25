@@ -1,0 +1,16 @@
+# Instructor-only and Cisco NetAcad materials: never published
+resources/
+*.docx
+*.pptx
+*.pka
+*.pkt
+*.zip
+IT141_*syllabus*
+IT141_*Lecture_Notes*
+
+# Claude Code working notes: internal workflow guidance, not site content
+CLAUDE.md
+
+# Test scratch files
+_lc.html
+_stress.html
