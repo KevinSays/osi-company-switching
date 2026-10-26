@@ -1,0 +1,951 @@
+<meta charset="utf-8">
+<title>IT141 Session 2 – VLANs</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/theme.css">
+<script src="assets/site.js" defer></script>
+
+<header class="masthead">
+  <div class="wrap">
+    <p class="eyebrow">IT141 · SESSION 2 · FIELD NOTES</p>
+    <h1>VLANs: Breaking Up the Sprawl</h1>
+    <p class="lede">In CCNA 1, every switch sat in VLAN 1, and every broadcast reached every desk on the floor. You were told that was on purpose. Here's the payoff. This session, Local Dispatch draws walls that aren't really walls: VLANs split one switch into several separate networks, and a trunk carries all of them down a single cable. It's one of the most heavily tested modules in this course, and the foundation for the next four sessions.</p>
+    <div class="factrow">
+      <span class="fact"><b>New material</b> Module 3 — VLANs</span>
+      <span class="fact"><b>Network change</b> S2 moves to HQ; S3 joins at R2</span>
+      <span class="fact"><b>Next session</b> Module 4 — Inter-VLAN Routing</span>
+    </div>
+  </div>
+</header>
+
+<nav class="index" data-pin="#flashcards #quiz" aria-label="Section index">
+  <div class="wrap">
+    <a href="index.html" class="toc-link">↩ Contents</a>
+    <a href="#overview">Overview</a>
+    <a href="#sprawl">The Sprawl</a>
+    <a href="#vlans">What a VLAN Is</a>
+    <a href="#tagging">Tagging</a>
+    <a href="#create">Create &amp; Assign</a>
+    <a href="#mgmt">Management VLAN</a>
+    <a href="#verify">Verify</a>
+    <a href="#change">Change &amp; Delete</a>
+    <a href="#trunks">Trunks</a>
+    <a href="#native">Native Mismatch</a>
+    <a href="#dtp">DTP</a>
+    <a href="#parking">Parking</a>
+    <a href="#reach">What Works Now</a>
+    <a href="#mistakes">Common Mistakes</a>
+    <a href="#ticket">The Ticket</a>
+    <a href="#checkpoint">Checkpoint</a>
+    <a href="#flashcards">Flashcards</a>
+    <a href="#quiz">Quiz</a>
+    <a href="#examples">Examples</a>
+    <a href="#glossary">Glossary</a>
+  </div>
+</nav>
+
+<main class="wrap">
+
+  <!-- OVERVIEW -->
+  <section id="overview">
+    <div class="section-head">
+      <p class="kicker">Module 3</p>
+      <h2>What Session 2 covers</h2>
+      <p>One module, five topics, in NetAcad's order: what VLANs are and why they exist; how VLANs work across several switches (tagging, the native VLAN, the voice VLAN); creating VLANs and assigning ports; trunks; and DTP, the protocol that can build a trunk on its own whether you meant it to or not.</p>
+    </div>
+    <div class="cold-open">
+      <p class="tag">Cold open · Local Dispatch, Monday morning</p>
+      <p>The Rookie arrives to find S2 sitting on a cart outside the elevator. "Promoted," says the crew chief. "It's moving upstairs to HQ. The new switch, S3, takes its old desk at Shipping." By lunch, both HQ switches are cabled together, and the Rookie notices something on the monitoring screen: every time anyone on the floor asks "who has this address?", every single desk hears it. Front Desk hears Logistics' questions. Logistics hears Front Desk's. "That," says the Surveyor, "is The Sprawl. You met it in the Zoning Office. It never left. Today we finally put up walls."</p>
+    </div>
+    <ul class="obj-list">
+      <li>Explain the purpose of VLANs and list their benefits</li>
+      <li>Name the VLAN types: default, data, native, management, and voice</li>
+      <li>Describe how 802.1Q tagging and the native VLAN carry several VLANs across one trunk</li>
+      <li>Create and name VLANs, assign access ports, and configure a voice VLAN</li>
+      <li>Move switch management to its own VLAN</li>
+      <li>Verify, change, and delete VLANs, and reset a switch's VLAN database</li>
+      <li>Configure, verify, and reset an 802.1Q trunk</li>
+      <li>Recognize and fix a native VLAN mismatch</li>
+      <li>Predict which DTP mode combinations form a trunk</li>
+    </ul>
+    <div class="teach-note">
+      <span class="label">The network this session</span>
+      Two changes are already made in today's Packet Tracer file; you don't recable anything. <strong>S2 moved upstairs to HQ</strong>, connected to S1 by <code>F0/23 ↔ F0/23</code>. A new switch, <strong>S3</strong>, took S2's old desk at R2, keeping the old address <code>192.168.20.2</code> (it's pre-built; switch to Physical view to see the move). Two new PCs sit on S2: <strong>PC-C</strong> on F0/1 (<code>192.168.10.11/24</code>) and <strong>PC-D</strong> on F0/11 (<code>192.168.30.9/26</code>). By the end of the session, HQ has five VLANs.
+    </div>
+    <table class="spec">
+      <thead><tr><th>VLAN</th><th>Name</th><th>Subnet</th><th>Used for</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">10</td><td class="mono">FRONT-DESK</td><td class="mono">192.168.10.0/24</td><td>CCNA 1's LAN-A: PC-A, PC-C, and R1's LAN interface</td></tr>
+        <tr><td class="mono">30</td><td class="mono">LOGISTICS</td><td class="mono">192.168.30.0/26</td><td>CCNA 1 Session 12's "LAN-C, 50 users" block, now built: PC-D</td></tr>
+        <tr><td class="mono">99</td><td class="mono">MGMT</td><td class="mono">192.168.99.0/24</td><td>Switch management: S1 <code>.11</code>, S2 <code>.12</code></td></tr>
+        <tr><td class="mono">900</td><td class="mono">NATIVE</td><td>none</td><td>The native VLAN on every trunk. No hosts.</td></tr>
+        <tr><td class="mono">999</td><td class="mono">PARKING</td><td>none</td><td>Unused ports, shut down</td></tr>
+      </tbody>
+    </table>
+    <p>The numbering rule from the <a href="index.html#network">lab network</a> page: VLAN <em>N</em> uses <code>192.168.<em>N</em>.0</code>.</p>
+  </section>
+
+  <!-- THE SPRAWL -->
+  <section id="sprawl">
+    <div class="section-head">
+      <p class="kicker">Module 3.1</p>
+      <h2>The Sprawl: one broadcast domain</h2>
+      <p>Before any VLAN work, every port on S1 and S2 is in VLAN 1. Prove it's a problem first.</p>
+    </div>
+    <div class="teach-note callback">
+      <span class="label">CCNA 1 callback</span>
+      CCNA 1's final review promised this: "why the lab switches only use VLAN 1." And in <a href="https://kevinsays.github.io/131/">The Zoning Office</a>, The Sprawl was the villain: one giant broadcast domain. In CCNA 1 the only way to split a broadcast domain was a router. Session 1 reminded you why: switches flood broadcasts out every port.
+    </div>
+    <p>In today's starting file, S1 F0/23 and S2 F0/23 are both at their factory default, which makes them an ordinary access link in VLAN 1. So the two switches form one big broadcast domain. Make PC-A send a broadcast, then look at S2:</p>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">PC-A · force an ARP broadcast</span></div>
+      <div class="terminal-body"><span class="prompt">C:\&gt;</span> <span class="cmd">arp -d</span>
+<span class="prompt">C:\&gt;</span> <span class="cmd">ping 192.168.10.1</span></div>
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S2 · who has S2 heard from?</span></div>
+      <div class="terminal-body"><span class="prompt">S2#</span> <span class="cmd">show mac address-table</span>
+<span class="out">          Mac Address Table</span>
+<span class="out">-------------------------------------------</span>
+
+<span class="out">Vlan    Mac Address       Type        Ports</span>
+<span class="out">----    -----------       --------    -----</span>
+
+<span class="hl">   1    0060.5c3b.a801    DYNAMIC     Fa0/23</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong>PC-A's MAC shows up on S2</strong>, learned on Fa0/23. The only way S2 could learn it is if a frame from PC-A crossed into S2: PC-A's ARP broadcast, flooded by S1 and then flooded again by S2.</li>
+      <li><strong>R1's MAC doesn't show up on S2.</strong> R1's reply was a unicast to PC-A, and S1 already knew PC-A was on Fa0/1, so the reply never left S1.</li>
+      <li>Run <code>clear mac address-table dynamic</code> on S2 first for a clean result. Your MAC addresses will differ.</li>
+    </ul>
+    <div class="teach-note">
+      <span class="label">See it: Simulation mode</span>
+      In Packet Tracer, switch to <strong>Simulation</strong>, filter for ARP, and repeat the ping. Watch PC-A's broadcast reach PC-C <strong>and PC-D</strong>. PC-D is in a different subnet (<code>192.168.30.0/26</code>), but it's in the same broadcast domain, so it still has to receive the frame and throw it away. Multiply that by every host and every broadcast: that's The Sprawl. (This is the idea behind NetAcad's activity 3.1.4, "Who Hears the Broadcast?")
+    </div>
+  </section>
+
+  <!-- WHAT A VLAN IS -->
+  <section id="vlans">
+    <div class="section-head">
+      <p class="kicker">Module 3.1</p>
+      <h2>What a VLAN is</h2>
+      <p>A <strong>VLAN</strong> (virtual LAN) is a group of switch ports that behaves as its own separate LAN. Each VLAN is its own broadcast domain and, by convention, its own IP subnet. Hosts in different VLANs can't talk to each other unless something routes between them, exactly as if they were plugged into different switches.</p>
+    </div>
+    <h3 class="sub">Why bother</h3>
+    <ul class="obj-list">
+      <li><strong>Smaller broadcast domains:</strong> fewer devices hear each broadcast</li>
+      <li><strong>Better security:</strong> only users in the same VLAN can reach each other directly</li>
+      <li><strong>IT efficiency:</strong> group users by role, not by where their desk is</li>
+      <li><strong>Lower cost:</strong> fewer switches and uplinks for the same separation</li>
+      <li><strong>Better performance:</strong> less unnecessary traffic on every link</li>
+      <li><strong>Simpler management:</strong> one VLAN per department or application</li>
+    </ul>
+    <h3 class="sub">Types of VLANs</h3>
+    <table class="spec">
+      <thead><tr><th>Type</th><th>What it is</th><th>In our network</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Default VLAN</strong></td><td>VLAN 1. Every port starts there. It can't be deleted or renamed.</td><td>Empty by the end of today</td></tr>
+        <tr><td><strong>Data VLAN</strong></td><td>Carries user traffic</td><td>10, 30</td></tr>
+        <tr><td><strong>Native VLAN</strong></td><td>On a trunk, the VLAN whose frames travel <strong>untagged</strong>. VLAN 1 by default.</td><td>900</td></tr>
+        <tr><td><strong>Management VLAN</strong></td><td>Carries management traffic: SSH, the switch's SVI. VLAN 1 by default.</td><td>99</td></tr>
+        <tr><td><strong>Voice VLAN</strong></td><td>Carries IP phone traffic, which needs priority and low delay (NetAcad: under 150 ms end to end)</td><td>None (no phones); shown as an example</td></tr>
+      </tbody>
+    </table>
+    <div class="teach-note warn">
+      <span class="label">VLAN 1 wears three hats by default</span>
+      Out of the box, VLAN 1 is the default VLAN, the native VLAN, <em>and</em> the management VLAN. Best practice is to move all three jobs off VLAN 1. By the end of today, ours are 10/30 for data, 900 for native, and 99 for management.
+    </div>
+    <h3 class="sub">VLAN ranges</h3>
+    <table class="spec">
+      <thead><tr><th>Range</th><th>Details</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Normal: 1–1005</strong></td><td>Used in small and medium networks. Stored in <code>vlan.dat</code> in flash, <em>not</em> in the running configuration. VLANs 1002–1005 are reserved for old Token Ring and FDDI, are created automatically, and can't be deleted.</td></tr>
+        <tr><td><strong>Extended: 1006–4094</strong></td><td>Used by service providers. Stored in the running configuration. On a 2960 they need a VTP setting that's beyond this course. NetAcad writes this range as "1006–4095", but VLAN 4095 is reserved, so 4094 is the highest you can use.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- TAGGING -->
+  <section id="tagging">
+    <div class="section-head">
+      <p class="kicker">Module 3.2</p>
+      <h2>VLANs across switches: tags and trunks</h2>
+      <p>PC-A is in VLAN 10 on S1. PC-C is in VLAN 10 on S2. The frames between them cross one cable that also carries VLANs 30 and 99. How does S2 know which VLAN a frame belongs to?</p>
+    </div>
+    <p>The link between the switches is a <strong>trunk</strong>: a point-to-point link that carries more than one VLAN. On a trunk, the sending switch adds an <strong>IEEE 802.1Q tag</strong> to each frame that says which VLAN it belongs to. The receiving switch reads the tag and forwards the frame only to ports in that VLAN, removing the tag when the frame leaves an access port. Hosts never see tags; access ports send and receive ordinary, untagged frames.</p>
+    <table class="spec">
+      <thead><tr><th>802.1Q tag field</th><th>Size</th><th>What it holds</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Type</strong> (TPID)</td><td>2 bytes</td><td><code>0x8100</code>: "this frame is tagged"</td></tr>
+        <tr><td><strong>User priority</strong></td><td>3 bits</td><td>Class of service (CoS), used for voice priority</td></tr>
+        <tr><td><strong>CFI</strong></td><td>1 bit</td><td>Canonical format identifier (legacy)</td></tr>
+        <tr><td><strong>VLAN ID</strong> (VID)</td><td>12 bits</td><td>The VLAN number, which is why VLAN IDs top out near 4,096</td></tr>
+      </tbody>
+    </table>
+    <p>The whole tag is <strong>4 bytes</strong>, inserted after the source MAC address. Because the frame changed, the switch recalculates the FCS.</p>
+    <div class="teach-note callback">
+      <span class="label">CCNA 1 callback</span>
+      The Ethernet II frame from <a href="https://kevinsays.github.io/131/">CCNA 1 Session 5</a>: preamble, destination MAC, source MAC, type, data, FCS. The 802.1Q tag slides in right after the source MAC, so a tagged frame is 4 bytes longer.
+    </div>
+    <h3 class="sub">The native VLAN</h3>
+    <p>One VLAN on each trunk crosses <strong>untagged</strong>: the native VLAN. Any untagged frame that arrives on a trunk is put in the native VLAN. It exists for compatibility with devices that don't tag. Both ends of a trunk <strong>must</strong> use the same native VLAN, and best practice is a native VLAN with no hosts in it, which is why ours is VLAN 900.</p>
+    <h3 class="sub">The voice VLAN</h3>
+    <p>An IP phone is really a tiny three-port switch: one port to the wall, one to the PC, one internal. The switch port it plugs into carries two VLANs at once: the PC's data VLAN (untagged) and the voice VLAN (tagged, with a CoS priority). The switch tells the phone which voice VLAN to use with <strong>CDP</strong>.</p>
+  </section>
+
+  <!-- CREATE & ASSIGN -->
+  <section id="create">
+    <div class="section-head">
+      <p class="kicker">Module 3.3</p>
+      <h2>Create VLANs and assign ports</h2>
+      <p>Two steps: create the VLAN (and name it), then put access ports in it. Both happen on <strong>every</strong> switch that uses the VLAN. This course doesn't use VTP, so nothing copies VLANs between switches for you.</p>
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · what a new switch looks like</span></div>
+      <div class="terminal-body"><span class="prompt">S1#</span> <span class="cmd">show vlan brief</span>
+
+<span class="out">VLAN Name                             Status    Ports</span>
+<span class="out">---- -------------------------------- --------- -------------------------------</span>
+<span class="out">1    default                          active    Fa0/1, Fa0/2, Fa0/3, Fa0/4</span>
+<span class="out">                                                Fa0/5, Fa0/6, Fa0/7, Fa0/8</span>
+<span class="out">                                                Fa0/9, Fa0/10, Fa0/11, Fa0/12</span>
+<span class="out">                                                Fa0/13, Fa0/14, Fa0/15, Fa0/16</span>
+<span class="out">                                                Fa0/17, Fa0/18, Fa0/19, Fa0/20</span>
+<span class="out">                                                Fa0/21, Fa0/22, Fa0/23, Fa0/24</span>
+<span class="out">                                                Gig0/1, Gig0/2</span>
+<span class="out">1002 fddi-default                     active</span>
+<span class="out">1003 token-ring-default               active</span>
+<span class="out">1004 fddinet-default                  active</span>
+<span class="out">1005 trnet-default                    active</span></div>
+    </div>
+    <p>Every port is in VLAN 1, plus the four reserved VLANs. (A real 2960 writes <code>Gi0/1</code> and shows the reserved VLANs as <code>act/unsup</code>; Packet Tracer writes it as shown.)</p>
+    <h3 class="sub">Step 1: create and name the VLANs</h3>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · create VLANs (then the same on S2)</span></div>
+      <div class="terminal-body"><span class="prompt">S1#</span> <span class="cmd">configure terminal</span>
+<span class="prompt">S1(config)#</span> <span class="hl">vlan 10</span>
+<span class="prompt">S1(config-vlan)#</span> <span class="hl">name FRONT-DESK</span>
+<span class="prompt">S1(config-vlan)#</span> <span class="cmd">vlan 30</span>
+<span class="prompt">S1(config-vlan)#</span> <span class="cmd">name LOGISTICS</span>
+<span class="prompt">S1(config-vlan)#</span> <span class="cmd">vlan 99</span>
+<span class="prompt">S1(config-vlan)#</span> <span class="cmd">name MGMT</span>
+<span class="prompt">S1(config-vlan)#</span> <span class="cmd">vlan 900</span>
+<span class="prompt">S1(config-vlan)#</span> <span class="cmd">name NATIVE</span>
+<span class="prompt">S1(config-vlan)#</span> <span class="cmd">vlan 999</span>
+<span class="prompt">S1(config-vlan)#</span> <span class="cmd">name PARKING</span>
+<span class="prompt">S1(config-vlan)#</span> <span class="cmd">end</span></div>
+    </div>
+    <ul class="obj-list">
+      <li>You can go from one <code>vlan</code> straight to the next without leaving VLAN configuration mode.</li>
+      <li><strong>Every switch needs its own copy</strong> of each VLAN it uses. Run the same block on S2. S3 at R2's site gets none of these; it has its own VLAN 20.</li>
+    </ul>
+    <h3 class="sub">Step 2: assign access ports</h3>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · access ports (then the same on S2)</span></div>
+      <div class="terminal-body"><span class="prompt">S1#</span> <span class="cmd">configure terminal</span>
+<span class="prompt">S1(config)#</span> <span class="hl">interface range f0/1 - 10</span>
+<span class="prompt">S1(config-if-range)#</span> <span class="hl">switchport mode access</span>
+<span class="prompt">S1(config-if-range)#</span> <span class="hl">switchport access vlan 10</span>
+<span class="prompt">S1(config-if-range)#</span> <span class="cmd">interface range f0/11 - 20</span>
+<span class="prompt">S1(config-if-range)#</span> <span class="cmd">switchport mode access</span>
+<span class="prompt">S1(config-if-range)#</span> <span class="cmd">switchport access vlan 30</span>
+<span class="prompt">S1(config-if-range)#</span> <span class="cmd">exit</span>
+<span class="comment">!</span>
+<span class="comment">! The link to R1 stays in VLAN 10, so PC-A keeps its gateway.</span>
+<span class="prompt">S1(config)#</span> <span class="cmd">interface g0/1</span>
+<span class="prompt">S1(config-if)#</span> <span class="cmd">switchport mode access</span>
+<span class="prompt">S1(config-if)#</span> <span class="cmd">switchport access vlan 10</span>
+<span class="prompt">S1(config-if)#</span> <span class="cmd">end</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong><code>switchport mode access</code> first.</strong> It makes the port permanently an access port, so DTP can't turn it into a trunk.</li>
+      <li><code>interface range</code> takes a space on each side of the hyphen (<code>f0/1 - 10</code>), and commas join ranges (<code>f0/21 - 22 , f0/24</code>).</li>
+      <li>On S2, run the same block <em>without</em> the <code>g0/1</code> part: S2's G0/1 is parked later today. PC-C ends up in VLAN 10 on F0/1, and PC-D in VLAN 30 on F0/11.</li>
+      <li>If you assign a port to a VLAN that doesn't exist yet, the switch creates it for you, with a default name such as VLAN0030 instead of yours.</li>
+    </ul>
+    <h3 class="sub">Example: a voice VLAN</h3>
+    <p>Our network has no IP phones, so this is for the syntax only, on a spare port. Remove it afterward.</p>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · voice VLAN (illustration only)</span></div>
+      <div class="terminal-body"><span class="prompt">S1(config)#</span> <span class="cmd">vlan 150</span>
+<span class="prompt">S1(config-vlan)#</span> <span class="cmd">name VOICE</span>
+<span class="prompt">S1(config-vlan)#</span> <span class="cmd">exit</span>
+<span class="prompt">S1(config)#</span> <span class="cmd">interface f0/9</span>
+<span class="prompt">S1(config-if)#</span> <span class="cmd">switchport mode access</span>
+<span class="prompt">S1(config-if)#</span> <span class="cmd">switchport access vlan 10</span>
+<span class="prompt">S1(config-if)#</span> <span class="cmd">mls qos trust cos</span>
+<span class="prompt">S1(config-if)#</span> <span class="hl">switchport voice vlan 150</span>
+<span class="prompt">S1(config-if)#</span> <span class="cmd">end</span>
+<span class="comment">!</span>
+<span class="comment">! Now undo it.</span>
+<span class="prompt">S1#</span> <span class="cmd">configure terminal</span>
+<span class="prompt">S1(config)#</span> <span class="cmd">interface f0/9</span>
+<span class="prompt">S1(config-if)#</span> <span class="cmd">no switchport voice vlan</span>
+<span class="prompt">S1(config-if)#</span> <span class="cmd">no mls qos trust cos</span>
+<span class="prompt">S1(config-if)#</span> <span class="cmd">exit</span>
+<span class="prompt">S1(config)#</span> <span class="cmd">no vlan 150</span>
+<span class="prompt">S1(config)#</span> <span class="cmd">end</span></div>
+    </div>
+    <div class="teach-note preview">
+      <span class="label">Beyond this course</span>
+      <code>mls qos trust cos</code> tells the switch to trust the phone's priority marking. That's QoS, which NetAcad lists as beyond this course: recognize it, don't worry about it.
+    </div>
+  </section>
+
+  <!-- MANAGEMENT VLAN -->
+  <section id="mgmt">
+    <div class="section-head">
+      <p class="kicker">Module 3.3</p>
+      <h2>Move management to VLAN 99</h2>
+      <p>Session 1 left S1's management address on VLAN 1, with a promise. Here it moves.</p>
+    </div>
+    <div class="teach-note callback">
+      <span class="label">Session 1 callback</span>
+      Remember the SVI rule from Session 1: an SVI comes up only when a port carrying its VLAN is up. That rule is about to matter.
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · retire VLAN 1, build VLAN 99 (S2 uses .12)</span></div>
+      <div class="terminal-body"><span class="prompt">S1#</span> <span class="cmd">configure terminal</span>
+<span class="comment">!</span>
+<span class="comment">! Retire the VLAN 1 management address.</span>
+<span class="prompt">S1(config)#</span> <span class="cmd">interface vlan 1</span>
+<span class="prompt">S1(config-if)#</span> <span class="cmd">no ip address</span>
+<span class="prompt">S1(config-if)#</span> <span class="cmd">shutdown</span>
+<span class="prompt">S1(config-if)#</span> <span class="cmd">exit</span>
+<span class="comment">!</span>
+<span class="comment">! The new management SVI.</span>
+<span class="prompt">S1(config)#</span> <span class="hl">interface vlan 99</span>
+<span class="prompt">S1(config-if)#</span> <span class="hl">ip address 192.168.99.11 255.255.255.0</span>
+<span class="prompt">S1(config-if)#</span> <span class="cmd">no shutdown</span>
+<span class="prompt">S1(config-if)#</span> <span class="cmd">exit</span>
+<span class="comment">!</span>
+<span class="comment">! A new ip default-gateway replaces the old one. 192.168.99.1 won&#x27;t exist until Session 3.</span>
+<span class="prompt">S1(config)#</span> <span class="hl">ip default-gateway 192.168.99.1</span>
+<span class="prompt">S1(config)#</span> <span class="cmd">end</span>
+<span class="prompt">S1#</span> <span class="cmd">show ip interface brief | include Vlan</span>
+<span class="out">Vlan1                  unassigned      YES manual administratively down down</span>
+<span class="hl">Vlan99                 192.168.99.11   YES manual up                    down</span></div>
+    </div>
+    <div class="teach-note">
+      <span class="label">Up / down is expected right now</span>
+      <code>Vlan99 … up down</code>: the SVI is enabled, but no port that carries VLAN 99 is up. No access port is in VLAN 99, and the trunk doesn't exist yet. When you build the trunk later today, watch for <code>%LINEPROTO-5-UPDOWN: Line protocol on Interface Vlan99, changed state to up</code>.
+    </div>
+    <div class="teach-note">
+      <span class="label">Notice S3</span>
+      S3 at R2's site manages itself on <strong>VLAN 20</strong>, and R2 has never heard of "VLAN 20": R2's port is just a router port. VLAN numbers mean something only inside the switches that have them.
+    </div>
+    <div class="teach-note warn">
+      <span class="label">You just lost SSH from PC-A, and that's expected</span>
+      PC-A is in VLAN 10. S1's management address is now in VLAN 99. Nothing routes between VLANs yet, so <strong>PC-A can't reach S1 or S2 over the network until Session 3</strong>. Use the console in the meantime.
+    </div>
+  </section>
+
+  <!-- VERIFY -->
+  <section id="verify">
+    <div class="section-head">
+      <p class="kicker">Module 3.3</p>
+      <h2>Verify VLANs</h2>
+      <p>Three commands answer almost every VLAN question.</p>
+    </div>
+    <table class="spec">
+      <thead><tr><th>Command</th><th>Answers</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">show vlan brief</td><td>Which VLANs exist, and which access ports are in each</td></tr>
+        <tr><td class="mono">show vlan id <em>n</em> / show vlan name <em>name</em></td><td>Details of one VLAN</td></tr>
+        <tr><td class="mono">show interfaces <em>id</em> switchport</td><td>Everything about one port: its mode, its access VLAN, its native VLAN, and whether it negotiates</td></tr>
+      </tbody>
+    </table>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · show vlan brief (end of session)</span></div>
+      <div class="terminal-body"><span class="prompt">S1#</span> <span class="cmd">show vlan brief</span>
+
+<span class="out">VLAN Name                             Status    Ports</span>
+<span class="out">---- -------------------------------- --------- -------------------------------</span>
+<span class="out">1    default                          active</span>
+<span class="out">10   FRONT-DESK                       active    Fa0/1, Fa0/2, Fa0/3, Fa0/4</span>
+<span class="out">                                                Fa0/5, Fa0/6, Fa0/7, Fa0/8</span>
+<span class="out">                                                Fa0/9, Fa0/10, Gig0/1</span>
+<span class="out">30   LOGISTICS                        active    Fa0/11, Fa0/12, Fa0/13, Fa0/14</span>
+<span class="out">                                                Fa0/15, Fa0/16, Fa0/17, Fa0/18</span>
+<span class="out">                                                Fa0/19, Fa0/20</span>
+<span class="out">99   MGMT                             active</span>
+<span class="out">900  NATIVE                           active</span>
+<span class="out">999  PARKING                          active    Fa0/21, Fa0/22, Fa0/24, Gig0/2</span>
+<span class="out">1002 fddi-default                     active</span>
+<span class="out">1003 token-ring-default               active</span>
+<span class="out">1004 fddinet-default                  active</span>
+<span class="out">1005 trnet-default                    active</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong>Where's Fa0/23?</strong> Trunk ports never appear in <code>show vlan brief</code>, because a trunk carries many VLANs. Use <code>show interfaces trunk</code>.</li>
+      <li><strong>VLANs 99 and 900 list no ports.</strong> That's right: 99 is reached through its SVI over the trunk, and 900 only exists on the trunk.</li>
+      <li>VLAN 1 is empty, but it can't be deleted. Shut-down ports are still listed under their VLAN.</li>
+    </ul>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · show vlan id 10 (trimmed)</span></div>
+      <div class="terminal-body"><span class="prompt">S1#</span> <span class="cmd">show vlan id 10</span>
+
+<span class="out">VLAN Name                             Status    Ports</span>
+<span class="out">---- -------------------------------- --------- -------------------------------</span>
+<span class="out">10   FRONT-DESK                       active    Fa0/1, Fa0/2, Fa0/3, Fa0/4</span>
+<span class="out">                                                Fa0/5, Fa0/6, Fa0/7, Fa0/8</span>
+<span class="out">                                                Fa0/9, Fa0/10, Gig0/1</span>
+<span class="out">...</span></div>
+    </div>
+    <p><code>show vlan name FRONT-DESK</code> gives the same output (names are case-sensitive).</p>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · show interfaces f0/1 switchport (trimmed)</span></div>
+      <div class="terminal-body"><span class="prompt">S1#</span> <span class="cmd">show interfaces f0/1 switchport</span>
+<span class="out">Name: Fa0/1</span>
+<span class="out">Switchport: Enabled</span>
+<span class="hl">Administrative Mode: static access</span>
+<span class="hl">Operational Mode: static access</span>
+<span class="out">Administrative Trunking Encapsulation: dot1q</span>
+<span class="out">Operational Trunking Encapsulation: native</span>
+<span class="hl">Negotiation of Trunking: Off</span>
+<span class="hl">Access Mode VLAN: 10 (FRONT-DESK)</span>
+<span class="hl">Trunking Native Mode VLAN: 1 (default)</span>
+<span class="out">Voice VLAN: none</span>
+<span class="out">...</span></div>
+    </div>
+    <table class="spec">
+      <thead><tr><th>Line</th><th>Tells you</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Administrative Mode</strong></td><td>What you configured</td></tr>
+        <tr><td><strong>Operational Mode</strong></td><td>What the port is actually doing. When these two disagree, DTP decided something.</td></tr>
+        <tr><td><strong>Negotiation of Trunking</strong></td><td><code>Off</code> because of <code>switchport mode access</code>: no DTP</td></tr>
+        <tr><td><strong>Access Mode VLAN</strong></td><td>The port's data VLAN</td></tr>
+        <tr><td><strong>Trunking Native Mode VLAN</strong></td><td>Only used if the port were a trunk</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- CHANGE & DELETE -->
+  <section id="change">
+    <div class="section-head">
+      <p class="kicker">Module 3.3</p>
+      <h2>Change, delete, and reset VLANs</h2>
+      <p>The rule NetAcad wants you to remember: <strong>move the ports out before you delete a VLAN.</strong></p>
+    </div>
+    <h3 class="sub">Move a port back to VLAN 1</h3>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1</span></div>
+      <div class="terminal-body"><span class="prompt">S1(config)#</span> <span class="cmd">interface f0/10</span>
+<span class="prompt">S1(config-if)#</span> <span class="hl">no switchport access vlan</span>
+<span class="prompt">S1(config-if)#</span> <span class="cmd">end</span></div>
+    </div>
+    <p>F0/10 now shows under VLAN 1. Put it back with <code>switchport access vlan 10</code>.</p>
+    <h3 class="sub">Delete a VLAN that still has ports (try it on S2, then undo)</h3>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S2</span></div>
+      <div class="terminal-body"><span class="prompt">S2(config)#</span> <span class="hl">no vlan 30</span>
+<span class="prompt">S2(config)#</span> <span class="cmd">end</span>
+<span class="prompt">S2#</span> <span class="cmd">show interfaces f0/11 switchport | include Access Mode</span>
+<span class="hl">Access Mode VLAN: 30 (Inactive)</span></div>
+    </div>
+    <p>Ports F0/11–F0/20 vanish from <code>show vlan brief</code>, and PC-D is cut off. The ports <strong>don't</strong> fall back to VLAN 1. Fix: <code>vlan 30</code>, <code>name LOGISTICS</code>, and they come back.</p>
+    <h3 class="sub">Reset every VLAN on a switch</h3>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">Scratch switch only, not the course file</span></div>
+      <div class="terminal-body"><span class="prompt">Switch#</span> <span class="hl">delete flash:vlan.dat</span>
+<span class="out">Delete filename [vlan.dat]?</span>
+<span class="out">Delete flash:/vlan.dat? [confirm]</span>
+<span class="prompt">Switch#</span> <span class="cmd">erase startup-config</span>
+<span class="out">Erasing the nvram filesystem will remove all configuration files! Continue? [confirm]</span>
+<span class="out">[OK]</span>
+<span class="out">Erase of nvram: complete</span>
+<span class="prompt">Switch#</span> <span class="cmd">reload</span>
+<span class="out">Proceed with reload? [confirm]</span></div>
+    </div>
+    <div class="teach-note">
+      <span class="label">Why both?</span>
+      VLANs live in <code>vlan.dat</code>, not the startup config. Erasing only the startup config leaves the VLANs behind after the reload, which surprises everyone the first time. NetAcad's full reset: unplug the data cables, erase the startup config, delete <code>vlan.dat</code>, reload.
+    </div>
+  </section>
+
+  <!-- TRUNKS -->
+  <section id="trunks">
+    <div class="section-head">
+      <p class="kicker">Module 3.4</p>
+      <h2>Build the trunk: S1 F0/23 ↔ S2 F0/23</h2>
+      <p>The link between the switches has been an ordinary access link in VLAN 1. Now it becomes a trunk carrying VLANs 10, 30, 99, and 900, with 900 as the native VLAN.</p>
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · F0/23 trunk (then exactly the same on S2)</span></div>
+      <div class="terminal-body"><span class="prompt">S1#</span> <span class="cmd">configure terminal</span>
+<span class="prompt">S1(config)#</span> <span class="cmd">interface f0/23</span>
+<span class="prompt">S1(config-if)#</span> <span class="hl">switchport mode trunk</span>
+<span class="prompt">S1(config-if)#</span> <span class="hl">switchport trunk native vlan 900</span>
+<span class="prompt">S1(config-if)#</span> <span class="hl">switchport trunk allowed vlan 10,30,99,900</span>
+<span class="prompt">S1(config-if)#</span> <span class="cmd">switchport nonegotiate</span>
+<span class="prompt">S1(config-if)#</span> <span class="cmd">end</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong>No encapsulation command.</strong> The 2960 only does 802.1Q. A Layer 3 switch such as the 3560 needs <code>switchport trunk encapsulation dot1q</code> <em>before</em> <code>switchport mode trunk</code>, and NetAcad's Packet Tracer activities type it on the 3650 too. You'll meet one in Session 3.</li>
+      <li><strong>Between configuring S1 and S2</strong>, S1 logs a native VLAN mismatch for a moment, because S2 still uses native 1. It stops once both ends match.</li>
+      <li><strong>Configure both ends.</strong> If S1 is <code>trunk</code> + <code>nonegotiate</code> while S2 is still <code>dynamic auto</code>, S2 never hears a DTP request and stays an access port: a one-sided trunk. <code>nonegotiate</code> belongs only where the far end is also set to <code>trunk</code>.</li>
+    </ul>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · show interfaces trunk</span></div>
+      <div class="terminal-body"><span class="prompt">S1#</span> <span class="cmd">show interfaces trunk</span>
+<span class="out">Port        Mode             Encapsulation  Status        Native vlan</span>
+<span class="hl">Fa0/23      on               802.1q         trunking      900</span>
+
+<span class="out">Port        Vlans allowed on trunk</span>
+<span class="out">Fa0/23      10,30,99,900</span>
+
+<span class="out">Port        Vlans allowed and active in management domain</span>
+<span class="out">Fa0/23      10,30,99,900</span>
+
+<span class="out">Port        Vlans in spanning tree forwarding state and not pruned</span>
+<span class="out">Fa0/23      10,30,99,900</span></div>
+    </div>
+    <ol class="steps">
+      <li><strong>Mode, encapsulation, status, native VLAN.</strong> <code>on</code> means a static trunk.</li>
+      <li><strong>Allowed:</strong> what you permitted.</li>
+      <li><strong>Allowed and active:</strong> permitted <em>and</em> the VLAN exists on this switch. A VLAN you forgot to create drops out here.</li>
+      <li><strong>Forwarding:</strong> what Spanning Tree is actually forwarding. This gets interesting in Session 4.</li>
+    </ol>
+    <h3 class="sub">Reset a trunk to its defaults</h3>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1</span></div>
+      <div class="terminal-body"><span class="prompt">S1(config)#</span> <span class="cmd">interface f0/23</span>
+<span class="prompt">S1(config-if)#</span> <span class="cmd">no switchport trunk allowed vlan</span>
+<span class="prompt">S1(config-if)#</span> <span class="cmd">no switchport trunk native vlan</span>
+<span class="prompt">S1(config-if)#</span> <span class="cmd">end</span></div>
+    </div>
+    <p>Now every VLAN is allowed and the native VLAN is 1. To make the port an access port again, use <code>switchport mode access</code>. Then put the course configuration back.</p>
+  </section>
+
+  <!-- NATIVE MISMATCH -->
+  <section id="native">
+    <div class="section-head">
+      <p class="kicker">Module 3.4</p>
+      <h2>Native VLAN mismatch</h2>
+      <p>The most common trunk mistake, and the one CDP warns you about.</p>
+    </div>
+    <p>Try it: on S2 only, run <code>no switchport trunk native vlan</code> on F0/23, which sends S2 back to native VLAN 1. Within a minute:</p>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · console message</span></div>
+      <div class="terminal-body"><span class="hl">%CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on FastEthernet0/23 (900), with S2 FastEthernet0/23 (1).</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong>Tagged VLANs (10, 30, 99) keep working.</strong> Their frames carry a tag, so both ends agree.</li>
+      <li><strong>Untagged traffic crosses between VLANs.</strong> An untagged frame S1 sends in VLAN 900 arrives in VLAN 1 on S2, and the other way around. Two VLANs that should be separate are leaking into each other. The untagged native VLAN is also what the double-tagging (VLAN hopping) attack in Session 8 abuses.</li>
+      <li>CDP repeats the warning about once a minute, on both switches.</li>
+      <li><strong>Fix:</strong> put <code>switchport trunk native vlan 900</code> back on S2.</li>
+    </ul>
+    <div class="teach-note preview">
+      <span class="label">Coming up in Session 4</span>
+      On real switches, Spanning Tree also notices the mismatch and blocks the affected VLANs on that port. Packet Tracer may only show the CDP message.
+    </div>
+  </section>
+
+  <!-- DTP -->
+  <section id="dtp">
+    <div class="section-head">
+      <p class="kicker">Module 3.5</p>
+      <h2>DTP: trunks that build themselves</h2>
+      <p><strong>Dynamic Trunking Protocol</strong> is Cisco's protocol for two switch ports to negotiate whether their link becomes a trunk. It's on by default. That's convenient when it works, and a security problem when someone plugs in a device that asks for a trunk. Best practice: set every port's mode yourself, and turn DTP off with <code>switchport nonegotiate</code>.</p>
+    </div>
+    <table class="spec">
+      <thead><tr><th>Mode</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">switchport mode access</td><td>Always an access port. Tells the neighbor to be an access link, too.</td></tr>
+        <tr><td class="mono">switchport mode trunk</td><td>Always a trunk. Tells the neighbor to become a trunk.</td></tr>
+        <tr><td class="mono">switchport mode dynamic desirable</td><td><strong>Asks</strong> the neighbor to trunk</td></tr>
+        <tr><td class="mono">switchport mode dynamic auto</td><td>Trunks only <strong>if asked</strong>. The 2960's default.</td></tr>
+        <tr><td class="mono">switchport nonegotiate</td><td>Sends no DTP at all. Only allowed with <code>access</code> or <code>trunk</code>. On a trunk, the far end must also be set to <code>trunk</code> by hand.</td></tr>
+      </tbody>
+    </table>
+    <h3 class="sub">Which pairs form a trunk</h3>
+    <table class="spec">
+      <thead><tr><th></th><th>Dynamic auto</th><th>Dynamic desirable</th><th>Trunk</th><th>Access</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Dynamic auto</strong></td><td><strong>Access</strong></td><td>Trunk</td><td>Trunk</td><td>Access</td></tr>
+        <tr><td><strong>Dynamic desirable</strong></td><td>Trunk</td><td>Trunk</td><td>Trunk</td><td>Access</td></tr>
+        <tr><td><strong>Trunk</strong></td><td>Trunk</td><td>Trunk</td><td>Trunk</td><td><em>Limited connectivity</em></td></tr>
+        <tr><td><strong>Access</strong></td><td>Access</td><td>Access</td><td><em>Limited connectivity</em></td><td>Access</td></tr>
+      </tbody>
+    </table>
+    <p><strong>The trap is the top-left cell.</strong> Auto plus auto gives an access link: both ends are willing, but neither one asks. That's exactly how S1 and S2 were cabled at the start of today.</p>
+
+    <div class="tool" id="dtpTool">
+      <p class="tool-title">Drill · Will it trunk?</p>
+      <p style="margin:0 0 10px; font-size:.9rem;">Two switch ports are cabled together. Predict what the link becomes.</p>
+      <div class="sorter-case" id="dtpCase"></div>
+      <div class="sorter-btns" id="dtpBtns"></div>
+      <div class="tool-out" id="dtpOut"></div>
+      <div class="toolbar" style="margin:12px 0 0;">
+        <button class="btn" id="dtpNext">Next pair</button>
+        <span id="dtpScore" style="font-family:var(--mono); font-size:.85rem; opacity:.75;"></span>
+      </div>
+    </div>
+    <h3 class="sub">See the trap on today's starting link</h3>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · before the trunk was built</span></div>
+      <div class="terminal-body"><span class="prompt">S1#</span> <span class="cmd">show interfaces f0/23 switchport</span>
+<span class="out">Name: Fa0/23</span>
+<span class="out">Switchport: Enabled</span>
+<span class="hl">Administrative Mode: dynamic auto</span>
+<span class="hl">Operational Mode: static access</span>
+<span class="out">Administrative Trunking Encapsulation: dot1q</span>
+<span class="out">Operational Trunking Encapsulation: native</span>
+<span class="out">Negotiation of Trunking: On</span>
+<span class="out">Access Mode VLAN: 1 (default)</span>
+<span class="out">...</span></div>
+    </div>
+    <p>Configured as <code>dynamic auto</code>, operating as an access port. Once PC-A and PC-C move to VLAN 10, this link carries only VLAN 1, so they can't reach each other. That's why the trunk is set by hand.</p>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · if a port is still dynamic</span></div>
+      <div class="terminal-body"><span class="prompt">S1(config-if)#</span> <span class="cmd">switchport nonegotiate</span>
+<span class="hl">Command rejected: Conflict between &#x27;nonegotiate&#x27; and &#x27;dynamic&#x27; status.</span></div>
+    </div>
+    <p>Set <code>switchport mode trunk</code> (or <code>access</code>) first, then <code>nonegotiate</code>. For the curious: <code>show dtp interface f0/23</code> shows DTP's own view of the port. You won't need it for the exam; <code>show interfaces switchport</code> is the one to know.</p>
+  </section>
+
+  <!-- PARKING -->
+  <section id="parking">
+    <div class="section-head">
+      <p class="kicker">Preview · Modules 10–11</p>
+      <h2>Park the unused ports</h2>
+      <p>One last tidy-up. Ports outside the plan go into VLAN 999, a VLAN with no gateway and no hosts, and get shut down. Session 9 explains why in full; today, just build the habit.</p>
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · park the ports outside the plan</span></div>
+      <div class="terminal-body"><span class="prompt">S1#</span> <span class="cmd">configure terminal</span>
+<span class="prompt">S1(config)#</span> <span class="hl">interface range f0/21 - 22 , f0/24 , g0/2</span>
+<span class="prompt">S1(config-if-range)#</span> <span class="cmd">switchport mode access</span>
+<span class="prompt">S1(config-if-range)#</span> <span class="hl">switchport access vlan 999</span>
+<span class="prompt">S1(config-if-range)#</span> <span class="hl">shutdown</span>
+<span class="prompt">S1(config-if-range)#</span> <span class="cmd">end</span></div>
+    </div>
+    <p>On S2 the range is <code>f0/21 - 22 , f0/24 , g0/1 - 2</code>. F0/24 and the Gigabit uplinks are waiting for Sessions 4 and 5.</p>
+    <p>A parked port is doubly safe: it's shut, and even if someone turns it on, they land in a VLAN with no gateway and no other hosts. In Session 9 you'll also park the unused ports <em>inside</em> the VLAN 10 and 30 ranges.</p>
+  </section>
+
+  <!-- WHAT WORKS NOW -->
+  <section id="reach">
+    <div class="section-head">
+      <p class="kicker">End of session</p>
+      <h2>What works now, and what doesn't</h2>
+      <p>Test every row of this table in Packet Tracer before you leave. The failures are expected, and they're next session's story.</p>
+    </div>
+    <table class="spec">
+      <thead><tr><th>From → To</th><th>Result</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>PC-A ↔ PC-C (<code>192.168.10.11</code>)</td><td><strong>Works</strong></td><td>Same VLAN (10), carried across the trunk</td></tr>
+        <tr><td>PC-A or PC-C → R1 (<code>192.168.10.1</code>)</td><td>Works</td><td>R1 is plugged into a VLAN 10 access port on S1</td></tr>
+        <tr><td>PC-A or PC-C → PC-B, SRV1, <code>www.it141.example</code></td><td>Works</td><td>Through R1 and R2, using the provided routes</td></tr>
+        <tr><td>PC-A → S3 (<code>192.168.20.2</code>, SSH)</td><td>Works</td><td>Routed through R1 and R2; S3 has a default gateway</td></tr>
+        <tr><td>S1 (<code>.99.11</code>) ↔ S2 (<code>.99.12</code>)</td><td><strong>Works</strong></td><td>Same VLAN (99), across the trunk</td></tr>
+        <tr><td>PC-A → PC-D (<code>192.168.30.9</code>)</td><td><strong>Fails</strong></td><td>Different VLAN and subnet, and nothing routes between VLANs yet</td></tr>
+        <tr><td>PC-D → its gateway <code>192.168.30.1</code></td><td>Fails</td><td>That address doesn't exist yet</td></tr>
+        <tr><td>PC-A → S1 or S2 (SSH)</td><td><strong>Fails</strong></td><td>VLAN 10 to VLAN 99 needs routing. Use the console.</td></tr>
+      </tbody>
+    </table>
+    <div class="teach-note preview">
+      <span class="label">Coming up in Session 3: R1 can only wear one hat</span>
+      R1's LAN port is plugged into a VLAN 10 access port, so R1 is the gateway for VLAN 10 and nothing else. VLANs 30 and 99 are cut off. Module 4 gives R1 a way to be the gateway for every VLAN over one cable (router-on-a-stick), and then hands the job to a smarter switch.
+    </div>
+  </section>
+
+  <!-- MISTAKES -->
+  <section id="mistakes">
+    <div class="section-head">
+      <p class="kicker">Watch for this</p>
+      <h2>Common Module 3 mistakes</h2>
+      <p>Two of these come up more than any others: access-port VLAN membership, and trunk and DTP settings.</p>
+    </div>
+    <h3 class="sub">1 · A host in the wrong VLAN</h3>
+    <p>PC-C's port was left in VLAN 1, or put in VLAN 30. From PC-A, <code>ping 192.168.10.11</code> times out, even though both PCs are on <code>192.168.10.0/24</code>, so the IP settings <em>look</em> fine. <code>show vlan brief</code> on S2 shows Fa0/1 under the wrong VLAN. Fix: <code>switchport access vlan 10</code>.</p>
+    <h3 class="sub">2 · The VLAN doesn't exist on the far switch</h3>
+    <p>The VLAN appears in "allowed on trunk" but is missing from "allowed and active" in <code>show interfaces trunk</code>. Watch for this with VLAN 99: <code>interface vlan 99</code> creates the SVI, but it does <strong>not</strong> create VLAN 99 itself.</p>
+    <h3 class="sub">3 · A VLAN left off the allowed list</h3>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · allowed list typed as 10,30,900</span></div>
+      <div class="terminal-body"><span class="prompt">S1#</span> <span class="cmd">show ip interface brief | include Vlan99</span>
+<span class="hl">Vlan99                 192.168.99.11   YES manual up                    down</span></div>
+    </div>
+    <p>VLAN 99 isn't carried, so both management SVIs go up/down and the switches can't ping each other. Fix: <code>switchport trunk allowed vlan add 99</code> on both ends. Don't retype the list without <code>add</code>: that replaces it.</p>
+    <h3 class="sub">4 · Native VLAN mismatch</h3>
+    <p>The CDP <code>NATIVE_VLAN_MISMATCH</code> message, repeating. Set the same native VLAN at both ends. (See <a href="#native">Native mismatch</a>.)</p>
+    <h3 class="sub">5 · Auto + auto, so no trunk</h3>
+    <p><code>show interfaces trunk</code> prints nothing, and <code>show interfaces f0/23 switchport</code> shows <code>Administrative Mode: dynamic auto</code>, <code>Operational Mode: static access</code>. Fix: <code>switchport mode trunk</code> on both ends.</p>
+    <h3 class="sub">6 · Deleting a VLAN with ports in it</h3>
+    <p>The ports disappear from <code>show vlan brief</code> and show <code>Access Mode VLAN: 30 (Inactive)</code>. Recreate the VLAN, or reassign the ports first next time.</p>
+    <h3 class="sub">7 · <code>nonegotiate</code> on a dynamic port</h3>
+    <p><code>Command rejected: Conflict between 'nonegotiate' and 'dynamic' status.</code> Set the mode by hand first.</p>
+    <h3 class="sub">8 · Reading up/down as "forgot no shutdown"</h3>
+    <p><code>administratively down</code> means you forgot <code>no shutdown</code>. <code>up down</code> on an SVI means no up port carries that VLAN: check the trunk and the allowed list.</p>
+  </section>
+
+  <!-- THE TICKET -->
+  <section id="ticket">
+    <div class="section-head">
+      <p class="kicker">Recurring segment</p>
+      <h2>The Ticket</h2>
+      <p>Turn it into steps before you open Packet Tracer.</p>
+    </div>
+    <div class="ticket-card">
+      <p class="tag">Ticket #141-02 · Priority: high · From: Logistics</p>
+      <p>We hired a new Logistics person and put them at the empty desk upstairs, by S2's port 14. They can't reach PC-D, who sits on the same team. Front Desk says they can see our traffic, which is not OK. Please fix by tomorrow.</p>
+    </div>
+    <details class="solution"><summary>One way to break it down</summary><div class="solbody">
+      <ol>
+        <li><strong>"Can't reach PC-D, same team"</strong>: both should be in VLAN 30. Check <code>show vlan brief</code> on S2: is F0/14 in VLAN 30, or still in VLAN 1? If it's in VLAN 999 and shut (parked), it needs to be un-parked: <code>switchport access vlan 30</code>, <code>no shutdown</code>.</li>
+        <li>Check the new PC's address: it must be inside <code>192.168.30.0/26</code> (usable .1–.62; pick an unused static address in .2–.8, because .1 is the future gateway, .9 is PC-D, and .10–.62 becomes the DHCP pool in Session 6), with a /26 mask, not /24, and gateway 192.168.30.1.</li>
+        <li><strong>"Front Desk can see our traffic"</strong>: a port is in the wrong VLAN. If the new PC landed in VLAN 10, or VLAN 1 still spans both switches, the broadcast domains are mixed. <code>show interfaces f0/14 switchport</code>: Access Mode VLAN should be 30.</li>
+        <li>Verify: ping PC-D from the new PC. Then confirm in Simulation mode that its ARP broadcasts don't reach PC-A or PC-C.</li>
+      </ol>
+    </div></details>
+  </section>
+
+  <!-- CHECKPOINT -->
+  <section id="checkpoint">
+    <div class="section-head">
+      <p class="kicker">Before Session 3</p>
+      <h2>Checkpoint: Module 3</h2>
+      <p>If you can do these cold, you're ready for inter-VLAN routing.</p>
+    </div>
+    <ul class="obj-list">
+      <li>The six VLAN benefits and the five VLAN types, and what VLAN 1 is by default</li>
+      <li>Normal vs. extended range, and where each is stored</li>
+      <li>The 802.1Q tag: its size, where it goes, and its four fields</li>
+      <li>What the native VLAN is, and what happens when the two ends don't match</li>
+      <li>Create, name, and assign VLANs from memory, including <code>interface range</code></li>
+      <li>Read <code>show vlan brief</code>, <code>show interfaces switchport</code>, and all four parts of <code>show interfaces trunk</code></li>
+      <li>Why trunk ports vanish from <code>show vlan brief</code></li>
+      <li>What happens to ports when you delete their VLAN, and how to fully reset a switch's VLANs</li>
+      <li>The DTP table, especially auto + auto. Practice with <a href="#dtpTool">Will it trunk?</a></li>
+    </ul>
+  </section>
+
+  <!-- FLASHCARDS -->
+  <section id="flashcards">
+    <div class="section-head">
+      <p class="kicker">Study</p>
+      <h2>Flashcards</h2>
+      <p>Click to flip. Double-click to mark as known.</p>
+    </div>
+    <div class="toolbar">
+      <button class="btn" id="shuffleBtn">Shuffle</button>
+      <button class="btn" id="resetKnownBtn">Reset progress</button>
+      <span id="cardProgress"></span>
+    </div>
+    <div class="card-grid" id="cardGrid"></div>
+  </section>
+
+  <!-- QUIZ -->
+  <section id="quiz">
+    <div class="section-head">
+      <p class="kicker">Check yourself</p>
+      <h2>Sample questions</h2>
+      <p>Pick an answer to see if you're right. Same style as the module-group exam.</p>
+    </div>
+    <div id="quizScore"></div>
+    <div id="quizList"></div>
+    <button class="btn" id="resetQuizBtn">Reset quiz</button>
+  </section>
+
+  <!-- EXAMPLES -->
+  <section id="examples">
+    <div class="section-head">
+      <p class="kicker">Applied</p>
+      <h2>Worked examples</h2>
+      <p>Think it through before you expand the answer.</p>
+    </div>
+
+    <div class="example">
+      <span class="tag">Trunks</span>
+      <h3>Same VLAN, different switches, no ping</h3>
+      <p>PC-A (S1, VLAN 10) can't ping PC-C (S2, VLAN 10). Both ports show the right VLAN in <code>show vlan brief</code>. On S1, <code>show interfaces trunk</code> prints nothing at all. What's wrong?</p>
+      <details class="solution"><summary>Show answer</summary><div class="solbody">
+        <p>The link between the switches isn't a trunk. An empty <code>show interfaces trunk</code> means no port is trunking. Most likely both ends are still <code>dynamic auto</code>, which forms an access link in VLAN 1, so VLAN 10 frames can't cross. Fix: <code>switchport mode trunk</code> on F0/23 at both ends, then the native and allowed VLAN settings.</p>
+      </div></details>
+    </div>
+
+    <div class="example">
+      <span class="tag">Allowed VLANs</span>
+      <h3>The one-word mistake</h3>
+      <p>The trunk allows <code>10,30,99,900</code>. You want to add VLAN 40 later, so you type <code>switchport trunk allowed vlan 40</code>. What happens?</p>
+      <details class="solution"><summary>Show answer</summary><div class="solbody">
+        <p>The allowed list becomes <strong>only</strong> VLAN 40. VLANs 10, 30, 99 and 900 stop crossing the trunk: PC-A loses PC-C, and the management SVIs drop to up/down. The right command is <code>switchport trunk allowed vlan <strong>add</strong> 40</code>. (There's also <code>remove</code>, <code>except</code>, and <code>all</code>.)</p>
+      </div></details>
+    </div>
+
+    <div class="example">
+      <span class="tag">Deleting VLANs</span>
+      <h3>Where did ten ports go?</h3>
+      <p>After <code>no vlan 30</code> on S2, ports F0/11–F0/20 don't appear anywhere in <code>show vlan brief</code>, and PC-D can't reach anything. Did they move to VLAN 1?</p>
+      <details class="solution"><summary>Show answer</summary><div class="solbody">
+        <p>No. They're still assigned to VLAN 30, which no longer exists, so they're <strong>inactive</strong>. <code>show interfaces f0/11 switchport</code> shows <code>Access Mode VLAN: 30 (Inactive)</code>. They don't move to VLAN 1 by themselves. Fix: recreate VLAN 30 (<code>vlan 30</code>, <code>name LOGISTICS</code>) and the ports come back, or reassign them first if you really meant to delete it.</p>
+      </div></details>
+    </div>
+
+    <div class="example">
+      <span class="tag">Resetting</span>
+      <h3>The VLANs that came back from the dead</h3>
+      <p>A classmate runs <code>erase startup-config</code> and <code>reload</code> to "wipe" S2. When it boots, the hostname is gone, but <code>show vlan brief</code> still lists VLANs 10, 30, 99, 900 and 999. Why?</p>
+      <details class="solution"><summary>Show answer</summary><div class="solbody">
+        <p>Normal-range VLANs live in <code>vlan.dat</code> in flash, not in the startup configuration. Erasing the startup config doesn't touch them. A full reset is: <code>delete flash:vlan.dat</code>, <code>erase startup-config</code>, then <code>reload</code>.</p>
+      </div></details>
+    </div>
+
+    <div class="example">
+      <span class="tag">Broadcast domains</span>
+      <h3>Count them again</h3>
+      <p>At the end of today, how many broadcast domains does HQ (S1, S2, and R1's LAN interface) have, counting only VLANs that contain hosts or a switch SVI?</p>
+      <details class="solution"><summary>Show answer</summary><div class="solbody">
+        <p><strong>Three:</strong> VLAN 10 (PC-A, PC-C, R1), VLAN 30 (PC-D), and VLAN 99 (the two switch SVIs, carried by the trunk). VLAN 900 has no hosts or SVIs (it only labels untagged frames on the trunk), VLAN 999's ports are shut, and VLAN 1 is empty. Before today, the same HQ was <strong>one</strong> broadcast domain. That's The Sprawl, beaten, at least at HQ.</p>
+      </div></details>
+    </div>
+  </section>
+
+  <!-- GLOSSARY -->
+  <section id="glossary">
+    <div class="section-head">
+      <p class="kicker">Reference</p>
+      <h2>Glossary &amp; index</h2>
+      <p>Every term from this session. Search, or jump by letter.</p>
+    </div>
+    <input type="text" id="glossarySearch" placeholder="Search terms…" aria-label="Search glossary">
+    <div class="alpha-nav" id="alphaNav"></div>
+    <dl class="glossary" id="glossaryList"></dl>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>IT141 · CCNA: Switching, Routing, and Wireless Essentials · Session 2 reference.</p>
+    <p class="license-note">© 2026 Zan Dick (<a href="https://github.com/KevinSays/osi-company-switching">KevinSays</a>), Mountwest Community &amp; Technical College · Content: <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/">CC BY-NC-SA 4.0</a> · Code: <a href="https://github.com/KevinSays/osi-company-switching/blob/main/LICENSE">MIT</a> · Cisco, NetAcad, CCNA and Packet Tracer are trademarks of Cisco; this site is not affiliated with or endorsed by Cisco.</p>
+  </div>
+</footer>
+
+<button id="backToTop" class="back-to-top" aria-label="Back to top" title="Back to top">↑</button>
+
+<script>
+  /* ---- will it trunk? ---- */
+  (function(){
+    const MODES = ['dynamic auto','dynamic desirable','trunk','access'];
+    // NetAcad's DTP table: result for [mode A][mode B]
+    const R = [
+      ['Access','Trunk','Trunk','Access'],
+      ['Trunk','Trunk','Trunk','Access'],
+      ['Trunk','Trunk','Trunk','Limited connectivity'],
+      ['Access','Access','Limited connectivity','Access'],
+    ];
+    const WHY = {
+      'Access|0|0': "Both ends are willing to trunk, but neither one asks. Auto + auto stays an access link. This is the classic trap.",
+      'Trunk|desirable': "Dynamic desirable actively asks to trunk, and the other end agrees.",
+      'Trunk|trunk': "A static trunk tells its neighbor to trunk, and a dynamic or trunk port agrees.",
+      'Access|access': "An access port is always access, and it tells its neighbor to be an access link too.",
+      'Limited connectivity': "One end is hard-set to trunk and the other to access. They disagree, so the link doesn't work properly. Set both ends by hand to the same mode.",
+    };
+    const OUT = ['Access','Trunk','Limited connectivity'];
+    const caseEl = document.getElementById('dtpCase'), btns = document.getElementById('dtpBtns'),
+          out = document.getElementById('dtpOut'), scoreEl = document.getElementById('dtpScore');
+    let right = 0, done = 0, n = 0;
+    function why(a, b, res){
+      if (res === 'Limited connectivity') return WHY['Limited connectivity'];
+      if (res === 'Access' && a === 0 && b === 0) return WHY['Access|0|0'];
+      if (res === 'Access') return WHY['Access|access'];
+      if (a === 1 || b === 1) return WHY['Trunk|desirable'];
+      return WHY['Trunk|trunk'];
+    }
+    function show(){
+      n++;
+      // weight auto+auto so the trap shows up often
+      let a, b;
+      if (Math.random() < 0.2) { a = 0; b = 0; }
+      else { a = Math.floor(Math.random()*4); b = Math.floor(Math.random()*4); }
+      const res = R[a][b];
+      caseEl.innerHTML = `<span class="count">Pair ${n}</span>S1 F0/23: <code>switchport mode ${MODES[a]}</code><br>S2 F0/23: <code>switchport mode ${MODES[b]}</code>`;
+      out.innerHTML = ''; btns.innerHTML = ''; delete btns.dataset.done;
+      OUT.forEach(k => {
+        const el = document.createElement('button');
+        el.className = 'choice'; el.textContent = k;
+        el.addEventListener('click', () => {
+          if (btns.dataset.done) return;
+          btns.dataset.done = '1'; done++;
+          if (k === res) right++;
+          Array.from(btns.children).forEach(x => {
+            x.disabled = true;
+            if (x.textContent === res) x.classList.add('correct');
+            else if (x.textContent === k) x.classList.add('incorrect');
+          });
+          out.innerHTML = `<div class="row"><b>${k === res ? 'Right' : 'It\'s ' + res}</b><span>${why(a, b, res)}</span></div>`;
+          scoreEl.textContent = `${right} / ${done} right`;
+        });
+        btns.appendChild(el);
+      });
+    }
+    document.getElementById('dtpNext').addEventListener('click', show);
+    show();
+  })();
+
+  const TERMS = [
+    {t:"802.1Q", d:"The IEEE standard for VLAN tagging on trunks. Adds a 4-byte tag after the source MAC address."},
+    {t:"Access port", d:"A switch port that belongs to one data VLAN (plus, optionally, a voice VLAN) and sends and receives untagged frames."},
+    {t:"Allowed VLAN list", d:"The VLANs permitted to cross a trunk. Set with switchport trunk allowed vlan; use add or remove to change it without replacing it."},
+    {t:"Data VLAN", d:"A VLAN that carries user traffic."},
+    {t:"Default VLAN", d:"VLAN 1. Every port starts there. It can't be deleted or renamed."},
+    {t:"DTP", d:"Dynamic Trunking Protocol. Cisco's protocol for negotiating whether a link becomes a trunk. On by default; turn it off with switchport nonegotiate."},
+    {t:"Dynamic auto", d:"A DTP mode that trunks only if the other end asks. The 2960's default. Auto + auto stays an access link."},
+    {t:"Dynamic desirable", d:"A DTP mode that actively asks the other end to trunk."},
+    {t:"Extended range", d:"VLANs 1006–4094. Used by service providers; stored in the running configuration, not vlan.dat."},
+    {t:"Management VLAN", d:"The VLAN that carries management traffic, such as SSH to the switch's SVI. VLAN 1 by default; ours is VLAN 99."},
+    {t:"Native VLAN", d:"On a trunk, the VLAN whose frames cross untagged. VLAN 1 by default. Must match at both ends; ours is VLAN 900."},
+    {t:"Native VLAN mismatch", d:"The two ends of a trunk use different native VLANs. CDP logs a warning, and untagged traffic leaks between the two VLANs."},
+    {t:"Normal range", d:"VLANs 1–1005. Stored in vlan.dat in flash. 1002–1005 are reserved and can't be deleted."},
+    {t:"Parking VLAN", d:"An unused VLAN (ours is 999) that holds unused, shut-down ports, so anything plugged in lands somewhere harmless."},
+    {t:"switchport nonegotiate", d:"Stops a port from sending DTP frames. Needs switchport mode access or trunk on the same port."},
+    {t:"Tag", d:"The 4-byte 802.1Q field a switch adds to a frame on a trunk to say which VLAN it belongs to: type, priority, CFI, and the 12-bit VLAN ID."},
+    {t:"Trunk", d:"A point-to-point link that carries more than one VLAN, using 802.1Q tags."},
+    {t:"VLAN", d:"Virtual LAN: a group of switch ports that acts as a separate LAN and broadcast domain, usually with its own subnet."},
+    {t:"vlan.dat", d:"The file in flash that stores normal-range VLANs. Erasing the startup configuration doesn't delete it."},
+    {t:"Voice VLAN", d:"A VLAN for IP phone traffic, which needs priority and low delay. Set on an access port with switchport voice vlan."},
+  ];
+
+  const QUIZ = [
+    { q:"What is the main reason to divide a switched network into VLANs?",
+      choices:["To increase the number of collision domains","To reduce the size of broadcast domains","To let hosts in different subnets talk without a router","To make switches route packets"], correct:1,
+      explain:"Each VLAN is its own broadcast domain, so broadcasts reach fewer devices. Hosts in different VLANs still need routing to talk." },
+    { q:"Which VLAN is, by default, the default VLAN, the native VLAN, and the management VLAN on a Cisco switch?",
+      choices:["VLAN 0","VLAN 99","VLAN 1","VLAN 1002"], correct:2,
+      explain:"VLAN 1 has all three jobs out of the box. Best practice is to move each of them to another VLAN." },
+    { q:"Where are normal-range VLANs stored on a Catalyst 2960?",
+      choices:["In the vlan.dat file in flash","In the startup configuration in NVRAM","In the running configuration only","In the MAC address table"], correct:0,
+      explain:"Normal-range VLANs (1–1005) are kept in vlan.dat. That's why erasing the startup config doesn't remove them." },
+    { q:"How large is an 802.1Q tag, and where is it inserted?",
+      choices:["2 bytes, before the destination MAC","4 bytes, after the FCS","12 bits, inside the type field","4 bytes, after the source MAC address"], correct:3,
+      explain:"The 4-byte tag goes right after the source MAC. The switch then recalculates the FCS." },
+    { q:"What happens to an untagged frame that arrives on an 802.1Q trunk port?",
+      choices:["It is placed in the native VLAN","It is dropped","It is flooded to every VLAN","It is sent back with a tag"], correct:0,
+      explain:"Untagged frames on a trunk belong to the native VLAN. That's why both ends must agree on it." },
+    { q:"An administrator runs no vlan 30 while ports are still assigned to it. What happens to those ports?",
+      choices:["They move to VLAN 1","They become trunk ports","They become inactive until VLAN 30 exists again","They are shut down and moved to the native VLAN"], correct:2,
+      explain:"The ports stay assigned to a VLAN that no longer exists, so they can't pass traffic. Reassign ports before deleting a VLAN." },
+    { q:"Why doesn't port F0/23 appear in show vlan brief after it becomes a trunk?",
+      choices:["Trunk ports are shut down","show vlan brief lists only access ports; trunks are shown by show interfaces trunk","The port moved to the native VLAN","The VLAN database is corrupt"], correct:1,
+      explain:"A trunk carries many VLANs, so it isn't listed under any one of them. Use show interfaces trunk." },
+    { q:"Two 2960 switches are connected, and both ports are left at their default DTP mode. What does the link become?",
+      choices:["A trunk","An EtherChannel","Limited connectivity","An access link"], correct:3,
+      explain:"The 2960 default is dynamic auto. Auto + auto stays access: both ends are willing to trunk, but neither one asks." },
+    { q:"Which DTP combination results in a trunk?",
+      choices:["Dynamic auto and dynamic auto","Access and dynamic desirable","Dynamic auto and dynamic desirable","Access and trunk"], correct:2,
+      explain:"Dynamic desirable asks, and dynamic auto agrees when asked." },
+    { q:"S1 logs %CDP-4-NATIVE_VLAN_MISMATCH on its trunk to S2. What should the administrator do?",
+      choices:["Configure the same native VLAN on both ends of the trunk","Remove VLAN 1 from the allowed list","Disable CDP on both switches","Change both ports to dynamic desirable"], correct:0,
+      explain:"Set switchport trunk native vlan to the same value at both ends. Turning off CDP just hides the warning." },
+    { q:"A trunk currently allows VLANs 10, 30 and 99. Which command adds VLAN 40 without removing the others?",
+      choices:["switchport trunk allowed vlan 40","switchport trunk allowed vlan add 40","switchport trunk native vlan 40","switchport access vlan 40"], correct:1,
+      explain:"Without add, the command replaces the whole list with just VLAN 40." },
+    { q:"An IP phone and a PC share one access port. Which statement is true?",
+      choices:["The port must be configured as a trunk","The phone and the PC must be in the same VLAN","The PC's frames are tagged and the phone's are untagged","The phone's voice frames are tagged with the voice VLAN, and the PC's data frames are untagged"], correct:3,
+      explain:"The access port carries the data VLAN untagged for the PC and the voice VLAN tagged for the phone. The switch tells the phone its voice VLAN using CDP." },
+  ];
+</script>
