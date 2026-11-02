@@ -1,0 +1,1060 @@
+<meta charset="utf-8">
+<title>IT141 Session 3 – Inter-VLAN Routing</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/theme.css">
+<script src="assets/site.js" defer></script>
+
+<header class="masthead">
+  <div class="wrap">
+    <p class="eyebrow">IT141 · SESSION 3 · FIELD NOTES</p>
+    <h1>Inter-VLAN Routing: The Wrong Door</h1>
+    <p class="lede">Last session, VLANs sealed the departments off from each other. That was the point, but now Front Desk can't send anything to Logistics at all. Something has to route between the VLANs. This session does it twice: first R1 learns to wear one hat per VLAN on a single cable (router-on-a-stick), then a new Layer 3 switch, D1, takes the job over. The hosts never notice the swap, because a gateway is an address, not a box.</p>
+    <div class="factrow">
+      <span class="fact"><b>New material</b> Module 4 — Inter-VLAN Routing</span>
+      <span class="fact"><b>Network change</b> D1 (Layer 3 switch) joins HQ</span>
+      <span class="fact"><b>Next session</b> Group exam 1–4; Module 5 — STP</span>
+    </div>
+  </div>
+</header>
+
+<nav class="index" data-pin="#flashcards #quiz" aria-label="Section index">
+  <div class="wrap">
+    <a href="index.html" class="toc-link">↩ Contents</a>
+    <a href="#overview">Overview</a>
+    <a href="#doors">Three Ways</a>
+    <a href="#legacy">Legacy</a>
+    <a href="#stick">Router-on-a-Stick</a>
+    <a href="#stick-verify">Verify 3A</a>
+    <a href="#l3">Layer 3 Switch</a>
+    <a href="#swap">The Swap</a>
+    <a href="#l3-verify">Verify 3B</a>
+    <a href="#whichdoor">Which Door?</a>
+    <a href="#troubleshoot">Troubleshoot</a>
+    <a href="#faulthunt">Fault Hunt</a>
+    <a href="#reach">What Works Now</a>
+    <a href="#ticket">The Ticket</a>
+    <a href="#checkpoint">Checkpoint</a>
+    <a href="#flashcards">Flashcards</a>
+    <a href="#quiz">Quiz</a>
+    <a href="#examples">Examples</a>
+    <a href="#glossary">Glossary</a>
+  </div>
+</nav>
+
+<main class="wrap">
+
+  <!-- OVERVIEW -->
+  <section id="overview">
+    <div class="section-head">
+      <p class="kicker">Module 4</p>
+      <h2>What Session 3 covers</h2>
+      <p>One module, four topics, in NetAcad's order: what inter-VLAN routing is and the three ways to do it; router-on-a-stick; inter-VLAN routing on a Layer 3 switch; and troubleshooting both.</p>
+    </div>
+    <div class="cold-open">
+      <p class="tag">Cold open · Local Dispatch, the morning after</p>
+      <p>The walls went up yesterday, and by nine the phone is ringing. "Logistics can't send us anything," says Front Desk. "We can't send them anything either," says Logistics. The Rookie checks: PC-D can't even reach its own gateway. "Of course not," says the Surveyor. "We built three departments and gave the building one door. R1's LAN port is plugged into a Front Desk port, so it's Front Desk's door and nobody else's." The crew chief is already wheeling in a new box with a lot of ports on the front. "Two fixes," she says. "This morning, R1 learns to be three doors on one cable. This afternoon, this thing takes over, and nobody at a desk changes a single setting." On the whiteboard behind her, someone has drawn a door with a question mark on it.</p>
+    </div>
+    <ul class="obj-list">
+      <li>Explain why hosts in different VLANs need a router, and what each host's default gateway must be</li>
+      <li>Compare legacy inter-VLAN routing, router-on-a-stick, and Layer 3 switch inter-VLAN routing</li>
+      <li>Configure router-on-a-stick: an 802.1Q trunk on the switch, and one subinterface per VLAN on the router, including the native VLAN</li>
+      <li>Configure inter-VLAN routing on a Layer 3 switch with SVIs, <code>ip routing</code>, and a routed port</li>
+      <li>Verify inter-VLAN routing with <code>show</code> commands, <code>ping</code>, and <code>tracert</code></li>
+      <li>Troubleshoot common inter-VLAN routing problems: VLANs, trunks, access ports, subinterfaces, SVIs, and host gateways</li>
+    </ul>
+    <div class="teach-note">
+      <span class="label">The network this session</span>
+      Today has two Packet Tracer files, and you don't recable anything in either. <strong>Part 3A</strong> opens where Session 2 ended: no physical changes. S1 G0/1, the port facing R1, is still a VLAN 10 access port, and R1 G0/0/1 still holds <code>192.168.10.1</code>. You turn them into a trunk and subinterfaces. <strong>Part 3B</strong> opens from the finished 3A network with <strong>D1</strong>, a Catalyst 3650 Layer 3 switch, already added and cabled: R1 G0/0/1 now goes to <strong>D1 G1/0/24</strong>, and S1 G0/1 goes to <strong>D1 G1/0/1</strong>. D1's basic settings (hostname, passwords, SSH) are already done. R1's subinterfaces are still configured, so you start 3B by removing them. In both files, PC-C and PC-D have IPv6 set to Automatic.
+    </div>
+    <table class="spec">
+      <thead><tr><th>VLAN</th><th>Gateway</th><th>Part 3A: who answers</th><th>Part 3B: who answers</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">10 FRONT-DESK</td><td class="mono">192.168.10.1</td><td>R1 <code>G0/0/1.10</code></td><td>D1 <code>Vlan10</code></td></tr>
+        <tr><td class="mono">30 LOGISTICS</td><td class="mono">192.168.30.1</td><td>R1 <code>G0/0/1.30</code></td><td>D1 <code>Vlan30</code></td></tr>
+        <tr><td class="mono">99 MGMT</td><td class="mono">192.168.99.1</td><td>R1 <code>G0/0/1.99</code></td><td>D1 <code>Vlan99</code></td></tr>
+        <tr><td class="mono">900 NATIVE</td><td>none</td><td>R1 <code>G0/0/1.900</code> (no address)</td><td>— (no SVI)</td></tr>
+      </tbody>
+    </table>
+    <p>Same addresses in both columns. That's the whole trick of this session: the gateway address stays put, and only the device behind it changes.</p>
+  </section>
+
+  <!-- THREE WAYS -->
+  <section id="doors">
+    <div class="section-head">
+      <p class="kicker">Module 4.1</p>
+      <h2>Why VLANs need a router, and three ways to give them one</h2>
+      <p>A VLAN is a broadcast domain, and a subnet. Traffic between two subnets has to be <strong>routed</strong>, so traffic between two VLANs has to be routed too. That's <strong>inter-VLAN routing</strong>.</p>
+    </div>
+    <div class="teach-note callback">
+      <span class="label">CCNA 1 callback</span>
+      In <a href="https://kevinsays.github.io/131/">CCNA 1</a> you learned that a host sends anything for another network to its <strong>default gateway</strong>, and that a router interface is the edge of a broadcast domain. Both rules still hold. Each VLAN needs its own gateway address in its own subnet, and each host's gateway must be <strong>the one for its own VLAN</strong>. A PC in VLAN 30 with gateway <code>192.168.10.1</code> is knocking on the wrong door: that address isn't in its subnet, so it can't even reach it.
+    </div>
+    <table class="spec">
+      <thead><tr><th></th><th>Legacy</th><th>Router-on-a-stick</th><th>Layer 3 switch</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Gateway lives on</strong></td><td>One physical router interface per VLAN</td><td>One router <strong>subinterface</strong> per VLAN, all on one physical interface</td><td>One <strong>SVI</strong> per VLAN, on the switch itself</td></tr>
+        <tr><td><strong>Switch side</strong></td><td>One access port per VLAN</td><td>One <strong>trunk</strong> to the router</td><td>No router link needed for inter-VLAN traffic</td></tr>
+        <tr><td><strong>Scales?</strong></td><td>No: you run out of router ports</td><td>Moderately: every VLAN shares one link's bandwidth</td><td>Yes: routing happens in switch hardware</td></tr>
+        <tr><td><strong>Where you'll see it</strong></td><td>History, and exam questions</td><td>Small sites and branches. The final skills exam asks for it.</td><td>Most enterprise campus LANs</td></tr>
+        <tr><td><strong>This course</strong></td><td>Not built</td><td>Part 3A today; again in the Session 12 practice lab</td><td>Part 3B today, and permanent from now on</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- LEGACY -->
+  <section id="legacy">
+    <div class="section-head">
+      <p class="kicker">Module 4.1</p>
+      <h2>Legacy inter-VLAN routing</h2>
+      <p>The oldest method: give the router one physical interface for each VLAN, and cable each one to an access port in that VLAN. It works, and it's simple to read. It also means two VLANs cost two router ports and two switch ports, and twenty VLANs cost twenty of each. Routers don't have that many Ethernet ports, which is why nobody builds it any more. You'll only see it here, as a snippet. We aren't building it.</p>
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">R1 · legacy, one port per VLAN (illustrative only)</span></div>
+      <div class="terminal-body"><span class="prompt">R1(config)#</span> <span class="cmd">interface g0/0/1</span>
+<span class="prompt">R1(config-if)#</span> <span class="cmd">ip address 192.168.10.1 255.255.255.0</span>
+<span class="prompt">R1(config-if)#</span> <span class="cmd">no shutdown</span>
+<span class="prompt">R1(config-if)#</span> <span class="hl">interface g0/0/2</span>
+<span class="prompt">R1(config-if)#</span> <span class="cmd">ip address 192.168.30.1 255.255.255.192</span>
+<span class="prompt">R1(config-if)#</span> <span class="cmd">no shutdown</span></div>
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · one access port per VLAN (illustrative only)</span></div>
+      <div class="terminal-body"><span class="prompt">S1(config)#</span> <span class="cmd">interface g0/1</span>
+<span class="prompt">S1(config-if)#</span> <span class="cmd">switchport mode access</span>
+<span class="prompt">S1(config-if)#</span> <span class="cmd">switchport access vlan 10</span>
+<span class="prompt">S1(config-if)#</span> <span class="cmd">interface g0/2</span>
+<span class="prompt">S1(config-if)#</span> <span class="cmd">switchport mode access</span>
+<span class="prompt">S1(config-if)#</span> <span class="cmd">switchport access vlan 30</span></div>
+    </div>
+    <p><strong>Don't type this in Packet Tracer:</strong> the ISR4321 has no <code>G0/0/2</code>. It has two Gigabit ports, and one of them faces R2. That's the point. VLAN 30 would need a second router port, VLAN 99 a third. One door per department, and you run out of doors.</p>
+  </section>
+
+  <!-- ROUTER ON A STICK -->
+  <section id="stick">
+    <div class="section-head">
+      <p class="kicker">Module 4.2 · Part 3A</p>
+      <h2>Router-on-a-stick</h2>
+      <p>One physical router interface, one cable, one <strong>trunk</strong>. The router splits its interface into <strong>subinterfaces</strong>, one per VLAN. Each subinterface is told which VLAN tag it answers to with <code>encapsulation dot1Q</code>, and each one gets the gateway address for that VLAN. Frames come up the trunk tagged, the router routes them, and sends them back down the same cable with the new VLAN's tag.</p>
+    </div>
+    <h3 class="sub">Step 1: the router side is subinterfaces</h3>
+    <p>Router first, as in NetAcad's activity. Clear the old addresses off the physical port, because the <code>.10</code> subinterface is about to need <code>192.168.10.1</code>, and IOS won't let two interfaces share one subnet.</p>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">R1 · clear the physical interface</span></div>
+      <div class="terminal-body"><span class="prompt">R1#</span> <span class="cmd">configure terminal</span>
+<span class="prompt">R1(config)#</span> <span class="cmd">interface g0/0/1</span>
+<span class="prompt">R1(config-if)#</span> <span class="cmd">description Trunk to S1 G0/1</span>
+<span class="prompt">R1(config-if)#</span> <span class="hl">no ip address</span>
+<span class="comment">!</span>
+<span class="comment">! With no argument, this removes every IPv6 address on the port, link-local included.</span>
+<span class="prompt">R1(config-if)#</span> <span class="hl">no ipv6 address</span>
+<span class="comment">!</span>
+<span class="comment">! The physical port stays up. Its subinterfaces need it.</span>
+<span class="prompt">R1(config-if)#</span> <span class="cmd">no shutdown</span>
+<span class="prompt">R1(config-if)#</span> <span class="cmd">exit</span></div>
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">R1 · one subinterface per VLAN</span></div>
+      <div class="terminal-body"><span class="prompt">R1(config)#</span> <span class="hl">interface g0/0/1.10</span>
+<span class="prompt">R1(config-subif)#</span> <span class="cmd">description VLAN 10 FRONT-DESK gateway</span>
+<span class="comment">!</span>
+<span class="comment">! Encapsulation first. IOS won&#x27;t accept an IP address on a LAN subinterface without it.</span>
+<span class="prompt">R1(config-subif)#</span> <span class="hl">encapsulation dot1Q 10</span>
+<span class="prompt">R1(config-subif)#</span> <span class="cmd">ip address 192.168.10.1 255.255.255.0</span>
+<span class="prompt">R1(config-subif)#</span> <span class="cmd">ipv6 address fe80::1 link-local</span>
+<span class="prompt">R1(config-subif)#</span> <span class="cmd">ipv6 address 2001:db8:acad:10::1/64</span>
+<span class="prompt">R1(config-subif)#</span> <span class="cmd">exit</span>
+<span class="comment">!</span>
+<span class="prompt">R1(config)#</span> <span class="cmd">interface g0/0/1.30</span>
+<span class="prompt">R1(config-subif)#</span> <span class="cmd">description VLAN 30 LOGISTICS gateway</span>
+<span class="prompt">R1(config-subif)#</span> <span class="hl">encapsulation dot1Q 30</span>
+<span class="comment">!</span>
+<span class="comment">! VLAN 30 is the /26 from CCNA 1&#x27;s VLSM plan, not a /24.</span>
+<span class="prompt">R1(config-subif)#</span> <span class="cmd">ip address 192.168.30.1 255.255.255.192</span>
+<span class="prompt">R1(config-subif)#</span> <span class="cmd">ipv6 address fe80::1 link-local</span>
+<span class="prompt">R1(config-subif)#</span> <span class="cmd">ipv6 address 2001:db8:acad:30::1/64</span>
+<span class="prompt">R1(config-subif)#</span> <span class="cmd">exit</span>
+<span class="comment">!</span>
+<span class="prompt">R1(config)#</span> <span class="cmd">interface g0/0/1.99</span>
+<span class="prompt">R1(config-subif)#</span> <span class="cmd">description VLAN 99 MGMT gateway</span>
+<span class="prompt">R1(config-subif)#</span> <span class="hl">encapsulation dot1Q 99</span>
+<span class="prompt">R1(config-subif)#</span> <span class="cmd">ip address 192.168.99.1 255.255.255.0</span>
+<span class="prompt">R1(config-subif)#</span> <span class="cmd">ipv6 address fe80::1 link-local</span>
+<span class="prompt">R1(config-subif)#</span> <span class="cmd">ipv6 address 2001:db8:acad:99::1/64</span>
+<span class="prompt">R1(config-subif)#</span> <span class="cmd">exit</span>
+<span class="comment">!</span>
+<span class="comment">! The native VLAN: untagged frames from the trunk land here. It gets no address.</span>
+<span class="prompt">R1(config)#</span> <span class="cmd">interface g0/0/1.900</span>
+<span class="prompt">R1(config-subif)#</span> <span class="cmd">description Native VLAN 900 (no hosts)</span>
+<span class="prompt">R1(config-subif)#</span> <span class="hl">encapsulation dot1Q 900 native</span>
+<span class="prompt">R1(config-subif)#</span> <span class="cmd">end</span>
+<span class="prompt">R1#</span> <span class="cmd">copy running-config startup-config</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong>The prompt changes to <code>R1(config-subif)#</code>.</strong> If you see <code>config-if</code>, you left off the <code>.10</code>.</li>
+      <li><strong>The same <code>fe80::1</code> on every subinterface is fine.</strong> A link-local address only has to be unique on its own link, and each subinterface is a separate link. R1 already uses <code>fe80::1</code> on G0/0/0 and on its loopback.</li>
+      <li><strong><code>native</code> matches S1's trunk.</strong> S1 sends VLAN 900 untagged, so R1 has to file untagged frames under VLAN 900. Without the keyword, R1 would expect VLAN 900 tagged.</li>
+      <li><strong>IPv6 router advertisements now go out on <code>.10</code>, <code>.30</code> and <code>.99</code>.</strong> R1 has had <code>ipv6 unicast-routing</code> since Session 1, so PC-C and PC-D (set to Automatic) give themselves addresses in <code>:10::/64</code> and <code>:30::/64</code>. That's SLAAC, coming properly in Session 7.</li>
+    </ul>
+    <div class="teach-note">
+      <span class="label">Why did PC-A just lose its gateway?</span>
+      Try <code>ping 192.168.10.1</code> from PC-A right now. It fails, even though VLAN 10 worked all through Session 2. R1 now expects frames <strong>tagged</strong>, and S1 G0/1 is still an access port sending them <strong>untagged</strong>. Untagged frames land on <code>.900</code>, which has no address. Step 2 fixes it.
+    </div>
+    <h3 class="sub">Step 2: the switch side is a trunk</h3>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · the port facing R1 becomes a trunk</span></div>
+      <div class="terminal-body"><span class="prompt">S1#</span> <span class="cmd">configure terminal</span>
+<span class="prompt">S1(config)#</span> <span class="cmd">interface g0/1</span>
+<span class="prompt">S1(config-if)#</span> <span class="cmd">description Trunk to R1 G0/0/1</span>
+<span class="prompt">S1(config-if)#</span> <span class="hl">switchport mode trunk</span>
+<span class="prompt">S1(config-if)#</span> <span class="cmd">switchport trunk native vlan 900</span>
+<span class="prompt">S1(config-if)#</span> <span class="cmd">switchport trunk allowed vlan 10,30,99,900</span>
+<span class="comment">!</span>
+<span class="comment">! A router never speaks DTP, so turn it off.</span>
+<span class="prompt">S1(config-if)#</span> <span class="cmd">switchport nonegotiate</span>
+<span class="comment">!</span>
+<span class="comment">! Optional tidy-up: the old access VLAN line stays in the config but does nothing on a trunk.</span>
+<span class="prompt">S1(config-if)#</span> <span class="cmd">no switchport access vlan</span>
+<span class="prompt">S1(config-if)#</span> <span class="cmd">end</span>
+<span class="prompt">S1#</span> <span class="cmd">copy running-config startup-config</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong>The same settings as the S1–S2 trunk</strong> from Session 2, for the same reasons: native 900, an explicit allowed list, and <code>nonegotiate</code>.</li>
+      <li><strong><code>nonegotiate</code> is safe here.</strong> Session 2's rule was "only where the other end is set to trunk by hand." A router is exactly that: it tags frames and never sends DTP.</li>
+      <li><strong>No host changes anything.</strong> PC-D's gateway has been set to <code>192.168.30.1</code> since Session 2. Now that address finally exists.</li>
+    </ul>
+    <div class="teach-note">
+      <span class="label">Three rules for subinterfaces</span>
+      <strong>1.</strong> <code>encapsulation dot1Q</code> comes <em>before</em> the IP address. IOS won't take an address on a subinterface until it knows the VLAN. <strong>2.</strong> The subinterface number (<code>.30</code>) is just a label; the <code>encapsulation dot1Q 30</code> line is what actually matches the tag. Making them match is a habit worth keeping, because a mismatch is a classic exam fault. <strong>3.</strong> The <code>no shutdown</code> that matters is on the <em>physical</em> interface. Subinterfaces follow it: shut <code>G0/0/1</code>, and every subinterface goes down with it.
+    </div>
+  </section>
+
+  <!-- VERIFY 3A -->
+  <section id="stick-verify">
+    <div class="section-head">
+      <p class="kicker">Module 4.2 · Part 3A</p>
+      <h2>Verify router-on-a-stick</h2>
+      <p>Check the router, check the trunk, then prove it with a ping that crosses VLANs.</p>
+    </div>
+    <h3 class="sub">R1: are the subinterfaces up?</h3>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">R1 · interfaces</span></div>
+      <div class="terminal-body"><span class="prompt">R1#</span> <span class="cmd">show ip interface brief</span>
+<span class="out">Interface              IP-Address      OK? Method Status                Protocol</span>
+<span class="out">GigabitEthernet0/0/0   10.0.0.1        YES manual up                    up</span>
+<span class="hl">GigabitEthernet0/0/1   unassigned      YES manual up                    up</span>
+<span class="hl">GigabitEthernet0/0/1.10 192.168.10.1   YES manual up                    up</span>
+<span class="hl">GigabitEthernet0/0/1.30 192.168.30.1   YES manual up                    up</span>
+<span class="hl">GigabitEthernet0/0/1.99 192.168.99.1   YES manual up                    up</span>
+<span class="out">GigabitEthernet0/0/1.900 unassigned    YES unset  up                    up</span>
+<span class="out">Loopback0              209.165.200.225 YES manual up                    up</span>
+<span class="out">...</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong>The physical port is <code>unassigned</code> but up/up.</strong> It carries the subinterfaces and has no address of its own. <code>.900</code> is <code>unassigned</code> too, which is correct.</li>
+      <li><strong>up/up on a subinterface proves very little.</strong> It says the physical port is up. It does <em>not</em> say the VLAN number is right, or that the switch port is a trunk. Faults 3, 4 and 5 in <a href="#troubleshoot">Troubleshoot</a> all look perfect here.</li>
+      <li>Your screen may differ: Packet Tracer lines up the long subinterface names in its own way, and the Method column may say <code>unset</code> on G0/0/1.</li>
+    </ul>
+    <h3 class="sub">R1: which VLAN is each subinterface really on?</h3>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">R1 · the tag behind each subinterface</span></div>
+      <div class="terminal-body"><span class="prompt">R1#</span> <span class="cmd">show interfaces | include Gig|802.1Q</span>
+<span class="out">GigabitEthernet0/0/0 is up, line protocol is up</span>
+<span class="out">GigabitEthernet0/0/1 is up, line protocol is up</span>
+<span class="out">GigabitEthernet0/0/1.10 is up, line protocol is up</span>
+<span class="hl">  Encapsulation 802.1Q Virtual LAN, Vlan ID  10.</span>
+<span class="out">GigabitEthernet0/0/1.30 is up, line protocol is up</span>
+<span class="hl">  Encapsulation 802.1Q Virtual LAN, Vlan ID  30.</span>
+<span class="out">GigabitEthernet0/0/1.99 is up, line protocol is up</span>
+<span class="out">  Encapsulation 802.1Q Virtual LAN, Vlan ID  99.</span>
+<span class="out">GigabitEthernet0/0/1.900 is up, line protocol is up</span>
+<span class="out">  Encapsulation 802.1Q Virtual LAN, Vlan ID  900.</span></div>
+    </div>
+    <p>This is the command that catches a wrong VLAN number on a subinterface. <code>show ip interface brief</code> can't. If Packet Tracer doesn't accept the <code>|</code> filter, look at one at a time: <code>show interfaces g0/0/1.30</code>, and find the <code>Encapsulation 802.1Q</code> line.</p>
+    <h3 class="sub">S1: is the port to R1 a trunk?</h3>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · trunks</span></div>
+      <div class="terminal-body"><span class="prompt">S1#</span> <span class="cmd">show interfaces trunk</span>
+<span class="out">Port        Mode             Encapsulation  Status        Native vlan</span>
+<span class="out">Fa0/23      on               802.1q         trunking      900</span>
+<span class="hl">Gig0/1      on               802.1q         trunking      900</span>
+
+<span class="out">Port        Vlans allowed on trunk</span>
+<span class="out">Fa0/23      10,30,99,900</span>
+<span class="out">Gig0/1      10,30,99,900</span>
+
+<span class="out">Port        Vlans allowed and active in management domain</span>
+<span class="out">Fa0/23      10,30,99,900</span>
+<span class="out">Gig0/1      10,30,99,900</span>
+
+<span class="out">Port        Vlans in spanning tree forwarding state and not pruned</span>
+<span class="out">Fa0/23      10,30,99,900</span>
+<span class="out">Gig0/1      10,30,99,900</span></div>
+    </div>
+    <p><strong>Gig0/1 is listed now.</strong> If the port to the router isn't in this output, it isn't a trunk, and no VLAN gets its gateway. Gig0/1 has also left <code>show vlan brief</code>, just as F0/23 did in Session 2.</p>
+    <h3 class="sub">R1: every subinterface is a real network</h3>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">R1 · routing table</span></div>
+      <div class="terminal-body"><span class="prompt">R1#</span> <span class="cmd">show ip route</span>
+<span class="out">...</span>
+<span class="out">Gateway of last resort is not set</span>
+
+<span class="out">      10.0.0.0/8 is variably subnetted, 2 subnets, 2 masks</span>
+<span class="out">C        10.0.0.0/30 is directly connected, GigabitEthernet0/0/0</span>
+<span class="out">L        10.0.0.1/32 is directly connected, GigabitEthernet0/0/0</span>
+<span class="out">      192.168.10.0/24 is variably subnetted, 2 subnets, 2 masks</span>
+<span class="hl">C        192.168.10.0/24 is directly connected, GigabitEthernet0/0/1.10</span>
+<span class="out">L        192.168.10.1/32 is directly connected, GigabitEthernet0/0/1.10</span>
+<span class="out">S     192.168.20.0/24 [1/0] via 10.0.0.2</span>
+<span class="out">      192.168.30.0/24 is variably subnetted, 2 subnets, 2 masks</span>
+<span class="hl">C        192.168.30.0/26 is directly connected, GigabitEthernet0/0/1.30</span>
+<span class="out">L        192.168.30.1/32 is directly connected, GigabitEthernet0/0/1.30</span>
+<span class="out">      192.168.99.0/24 is variably subnetted, 2 subnets, 2 masks</span>
+<span class="hl">C        192.168.99.0/24 is directly connected, GigabitEthernet0/0/1.99</span>
+<span class="out">L        192.168.99.1/32 is directly connected, GigabitEthernet0/0/1.99</span>
+<span class="out">      209.165.200.0/24 is variably subnetted, 2 subnets, 2 masks</span>
+<span class="out">C        209.165.200.224/27 is directly connected, Loopback0</span>
+<span class="out">L        209.165.200.225/32 is directly connected, Loopback0</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong>Each subinterface gets its own <code>C</code> and <code>L</code> pair,</strong> just like G0/0/0. To the routing table, a subinterface is a real interface.</li>
+      <li><strong><code>192.168.30.0/26</code> sits under a <code>/24</code> heading.</strong> That's IOS grouping by the old classful network, the same VLSM display you met in CCNA 1.</li>
+      <li><strong>R2 needs nothing new.</strong> Its provided default route already sends everything to R1, and R1 is now directly connected to VLANs 30 and 99.</li>
+    </ul>
+    <h3 class="sub">Prove it: cross a VLAN</h3>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">PC-A · VLAN 10 to VLAN 30</span></div>
+      <div class="terminal-body"><span class="prompt">C:\&gt;</span> <span class="cmd">ping 192.168.30.9</span>
+
+<span class="out">Pinging 192.168.30.9 with 32 bytes of data:</span>
+
+<span class="hl">Reply from 192.168.30.9: bytes=32 time&lt;1ms TTL=127</span>
+<span class="out">Reply from 192.168.30.9: bytes=32 time&lt;1ms TTL=127</span>
+<span class="out">Reply from 192.168.30.9: bytes=32 time&lt;1ms TTL=127</span>
+<span class="out">Reply from 192.168.30.9: bytes=32 time&lt;1ms TTL=127</span></div>
+    </div>
+    <p><strong>TTL=127, not 128.</strong> PC-D's reply started at 128 and crossed one router, which took one off. A same-VLAN reply (PC-A to PC-C) comes back at 128. The first ping may time out while R1 ARPs for PC-D.</p>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">PC-A · trace the route</span></div>
+      <div class="terminal-body"><span class="prompt">C:\&gt;</span> <span class="cmd">tracert 192.168.30.9</span>
+
+<span class="out">Tracing route to 192.168.30.9 over a maximum of 30 hops:</span>
+
+<span class="hl">  1   0 ms      0 ms      0 ms      192.168.10.1</span>
+<span class="out">  2   0 ms      0 ms      0 ms      192.168.30.9</span>
+
+<span class="out">Trace complete.</span></div>
+    </div>
+    <p><strong>Hop 1 is PC-A's own gateway, the <code>.10</code> subinterface.</strong> The packet goes up the trunk tagged 10, R1 routes it, and it comes back down the <em>same cable</em> tagged 30. Every inter-VLAN packet crosses that one cable twice. That's router-on-a-stick's limit in one picture. (Your times will differ.)</p>
+    <table class="spec">
+      <thead><tr><th>Also test</th><th>What it proves</th></tr></thead>
+      <tbody>
+        <tr><td>PC-D → <code>192.168.30.1</code></td><td>VLAN 30's gateway exists now</td></tr>
+        <tr><td>PC-D → <code>www.it141.example</code></td><td>VLAN 30 is routed off the HQ LAN, and DNS works</td></tr>
+        <tr><td>PC-A → <code>ssh -l admin 192.168.99.11</code></td><td><strong>Session 2's cliffhanger is solved.</strong> VLAN 10 to VLAN 99 is routed now.</td></tr>
+        <tr><td>S1 → <code>ping 192.168.10.10</code></td><td>S1's default gateway, <code>192.168.99.1</code>, finally exists</td></tr>
+        <tr><td>PC-A → ping PC-D's IPv6 address (read it from <code>ipconfig</code> on PC-D)</td><td>IPv6 inter-VLAN routing, end to end</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- LAYER 3 SWITCH -->
+  <section id="l3">
+    <div class="section-head">
+      <p class="kicker">Module 4.3 · Part 3B</p>
+      <h2>Inter-VLAN routing on a Layer 3 switch</h2>
+      <p>A <strong>Layer 3 switch</strong> can switch frames <em>and</em> route packets, in hardware. Give it one <strong>SVI</strong> (switch virtual interface, <code>interface vlan N</code>) per VLAN with that VLAN's gateway address, turn on <code>ip routing</code>, and it routes between its own VLANs without ever sending a packet to a router. To reach anything outside HQ, it still needs a link to R1. That link is a <strong>routed port</strong>: a switch port that stops being a switch port (<code>no switchport</code>) and behaves like a router interface with its own IP address.</p>
+    </div>
+    <div class="teach-note callback">
+      <span class="label">CCNA 1 callback</span>
+      You've built SVIs before: every switch management address since CCNA 1 lives on one (<code>interface vlan 1</code>, now <code>interface vlan 99</code>). On a 2960, an SVI is only a way to manage the switch. On D1, an SVI is a real gateway, because D1 can route.
+    </div>
+    <table class="spec">
+      <thead><tr><th></th><th>Router-on-a-stick (3A)</th><th>Layer 3 switch (3B)</th></tr></thead>
+      <tbody>
+        <tr><td>Gateway for VLAN 30</td><td class="mono">R1 G0/0/1.30</td><td class="mono">D1 interface vlan 30</td></tr>
+        <tr><td>Turn routing on</td><td>IPv4 is on by default on a router; IPv6 still needs <code>ipv6 unicast-routing</code> (Session 1)</td><td><code>ip routing</code> (and <code>ipv6 unicast-routing</code>)</td></tr>
+        <tr><td>VLAN 10 → VLAN 30 path</td><td>Up the trunk to R1 and back down</td><td>Inside D1</td></tr>
+        <tr><td>Link to R1</td><td>The trunk itself</td><td>A routed port, <code>10.0.0.8/30</code></td></tr>
+        <tr><td>Speed</td><td>Limited by one link</td><td>Switch hardware speed</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- THE SWAP -->
+  <section id="swap">
+    <div class="section-head">
+      <p class="kicker">Module 4.3 · Part 3B</p>
+      <h2>The swap: hand the doors to D1</h2>
+      <p>Order matters here. If D1's SVIs come up while R1's subinterfaces still exist, two devices claim <code>192.168.10.1</code> at the same time. So R1 gives up the doors first, and D1 takes them second.</p>
+    </div>
+    <h3 class="sub">1 · R1 gives up the doors</h3>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">R1 · remove the subinterfaces, readdress G0/0/1</span></div>
+      <div class="terminal-body"><span class="prompt">R1#</span> <span class="cmd">configure terminal</span>
+<span class="prompt">R1(config)#</span> <span class="hl">no interface g0/0/1.10</span>
+<span class="prompt">R1(config)#</span> <span class="cmd">no interface g0/0/1.30</span>
+<span class="prompt">R1(config)#</span> <span class="cmd">no interface g0/0/1.99</span>
+<span class="prompt">R1(config)#</span> <span class="cmd">no interface g0/0/1.900</span>
+<span class="comment">!</span>
+<span class="prompt">R1(config)#</span> <span class="cmd">interface g0/0/1</span>
+<span class="prompt">R1(config-if)#</span> <span class="cmd">description Routed link to D1 G1/0/24</span>
+<span class="prompt">R1(config-if)#</span> <span class="hl">ip address 10.0.0.9 255.255.255.252</span>
+<span class="prompt">R1(config-if)#</span> <span class="cmd">ipv6 address fe80::1 link-local</span>
+<span class="prompt">R1(config-if)#</span> <span class="cmd">ipv6 address 2001:db8:acad:ff03::1/64</span>
+<span class="prompt">R1(config-if)#</span> <span class="cmd">no shutdown</span>
+<span class="prompt">R1(config-if)#</span> <span class="cmd">end</span></div>
+    </div>
+    <p>G0/0/1 is back to being a plain routed port, like G0/0/0, on a new <code>/30</code> that links R1 and D1. (On real routers, a deleted subinterface may linger in <code>show ip interface brief</code> as <code>deleted</code> until the next reload. Its configuration is gone.)</p>
+    <h3 class="sub">2 · D1: turn routing on</h3>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">D1 · routing</span></div>
+      <div class="terminal-body"><span class="prompt">D1#</span> <span class="cmd">configure terminal</span>
+<span class="comment">!</span>
+<span class="comment">! A Layer 3 switch doesn&#x27;t route IPv4 between its interfaces without this.</span>
+<span class="prompt">D1(config)#</span> <span class="hl">ip routing</span>
+<span class="comment">!</span>
+<span class="comment">! And the IPv6 twin, as on R1 in Session 1.</span>
+<span class="prompt">D1(config)#</span> <span class="cmd">ipv6 unicast-routing</span></div>
+    </div>
+    <h3 class="sub">3 · D1: the VLANs</h3>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">D1 · VLANs (the same as S1 and S2)</span></div>
+      <div class="terminal-body"><span class="prompt">D1(config)#</span> <span class="cmd">vlan 10</span>
+<span class="prompt">D1(config-vlan)#</span> <span class="cmd">name FRONT-DESK</span>
+<span class="prompt">D1(config-vlan)#</span> <span class="cmd">vlan 30</span>
+<span class="prompt">D1(config-vlan)#</span> <span class="cmd">name LOGISTICS</span>
+<span class="prompt">D1(config-vlan)#</span> <span class="cmd">vlan 99</span>
+<span class="prompt">D1(config-vlan)#</span> <span class="cmd">name MGMT</span>
+<span class="prompt">D1(config-vlan)#</span> <span class="cmd">vlan 900</span>
+<span class="prompt">D1(config-vlan)#</span> <span class="cmd">name NATIVE</span>
+<span class="prompt">D1(config-vlan)#</span> <span class="cmd">vlan 999</span>
+<span class="prompt">D1(config-vlan)#</span> <span class="cmd">name PARKING</span>
+<span class="prompt">D1(config-vlan)#</span> <span class="cmd">exit</span></div>
+    </div>
+    <p>There's no VTP in this course, so D1 needs its own copy of every VLAN it uses. Remember: <code>interface vlan 30</code> does <strong>not</strong> create VLAN 30.</p>
+    <h3 class="sub">4 · D1: the routed port to R1</h3>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">D1 · G1/0/24 stops being a switch port</span></div>
+      <div class="terminal-body"><span class="prompt">D1(config)#</span> <span class="cmd">interface g1/0/24</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">description Routed link to R1 G0/0/1</span>
+<span class="comment">!</span>
+<span class="comment">! Turns the Layer 2 switchport into a Layer 3 port, like a router interface.</span>
+<span class="prompt">D1(config-if)#</span> <span class="hl">no switchport</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">ip address 10.0.0.10 255.255.255.252</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">ipv6 address fe80::d1 link-local</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">ipv6 address 2001:db8:acad:ff03::2/64</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">no shutdown</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">end</span>
+<span class="prompt">D1#</span> <span class="cmd">ping 10.0.0.9</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong><code>no switchport</code> comes before the address.</strong> A switch port won't take an IP address.</li>
+      <li><strong><code>fe80::d1</code> is D1's link-local address on this link.</strong> R1's end is <code>fe80::1</code>, and the two ends of a link must differ. <code>d1</code> is valid hex.</li>
+      <li>Get the ping to <code>10.0.0.9</code> working before you go on. A routed port isn't in any VLAN, so it disappears from <code>show vlan brief</code>.</li>
+    </ul>
+    <h3 class="sub">5 · D1: the trunk to S1, and park the rest</h3>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">D1 · G1/0/1 to S1, then the parking lot</span></div>
+      <div class="terminal-body"><span class="prompt">D1#</span> <span class="cmd">configure terminal</span>
+<span class="prompt">D1(config)#</span> <span class="cmd">interface g1/0/1</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">description Trunk to S1 G0/1</span>
+<span class="comment">!</span>
+<span class="comment">! PT&#x27;s 3650 wants the encapsulation set before trunk mode. A 2960 has no such command.</span>
+<span class="prompt">D1(config-if)#</span> <span class="hl">switchport trunk encapsulation dot1q</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">switchport mode trunk</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">switchport trunk native vlan 900</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">switchport trunk allowed vlan 10,30,99,900</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">switchport nonegotiate</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">exit</span>
+<span class="comment">!</span>
+<span class="comment">! Everything not cabled yet. G1/0/2-4 and G1/0/20-21 get their jobs in Sessions 4, 5 and 10.</span>
+<span class="prompt">D1(config)#</span> <span class="cmd">interface range g1/0/2 - 23 , g1/1/1 - 4</span>
+<span class="prompt">D1(config-if-range)#</span> <span class="cmd">switchport mode access</span>
+<span class="prompt">D1(config-if-range)#</span> <span class="cmd">switchport access vlan 999</span>
+<span class="prompt">D1(config-if-range)#</span> <span class="cmd">shutdown</span>
+<span class="prompt">D1(config-if-range)#</span> <span class="cmd">end</span></div>
+    </div>
+    <div class="teach-note">
+      <span class="label">The encapsulation line</span>
+      Session 2 promised this would come up. A switch that supports more than one trunk encapsulation needs <code>switchport trunk encapsulation dot1q</code> <strong>before</strong> <code>switchport mode trunk</code>. Packet Tracer's 3650 behaves that way, so expect <code>switchport mode trunk</code> to be rejected until you set it. A 2960 has no such command, because it only does 802.1Q. On a <em>real</em> 3650, which also only does 802.1Q, the command may not exist at all. <strong>S1 needs no change:</strong> it kept its 3A trunk settings. Only the cable moved.
+    </div>
+    <h3 class="sub">6 · D1: the SVIs, last</h3>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">D1 · the doors come back</span></div>
+      <div class="terminal-body"><span class="prompt">D1#</span> <span class="cmd">configure terminal</span>
+<span class="prompt">D1(config)#</span> <span class="hl">interface vlan 10</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">description VLAN 10 FRONT-DESK gateway</span>
+<span class="prompt">D1(config-if)#</span> <span class="hl">ip address 192.168.10.1 255.255.255.0</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">ipv6 address fe80::1 link-local</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">ipv6 address 2001:db8:acad:10::1/64</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">no shutdown</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">exit</span>
+<span class="comment">!</span>
+<span class="prompt">D1(config)#</span> <span class="cmd">interface vlan 30</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">description VLAN 30 LOGISTICS gateway</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">ip address 192.168.30.1 255.255.255.192</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">ipv6 address fe80::1 link-local</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">ipv6 address 2001:db8:acad:30::1/64</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">no shutdown</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">exit</span>
+<span class="comment">!</span>
+<span class="prompt">D1(config)#</span> <span class="cmd">interface vlan 99</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">description VLAN 99 MGMT gateway</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">ip address 192.168.99.1 255.255.255.0</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">ipv6 address fe80::1 link-local</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">ipv6 address 2001:db8:acad:99::1/64</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">no shutdown</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">end</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong>The same addresses R1's subinterfaces had:</strong> <code>.1</code> and <code>fe80::1</code> in every VLAN. Hosts change nothing.</li>
+      <li><strong>SVIs need <code>no shutdown</code>.</strong> Unlike R1's subinterfaces, an SVI starts administratively down.</li>
+      <li><strong>D1 has no access ports in VLANs 10, 30 or 99.</strong> Each SVI stays up only because the G1/0/1 trunk carries its VLAN. If the trunk drops, or a VLAN leaves its allowed list, that SVI goes up/down.</li>
+    </ul>
+    <h3 class="sub">7 · The provided routes</h3>
+    <p>Type these exactly. They're explained in Module 15 (Session 11). In Part 3A the HQ networks were directly connected to R1. Now they're connected to D1, one hop away, so R1 needs to be told where they are, and D1 needs to be told where everything else is.</p>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">R1 · the HQ networks are behind D1</span></div>
+      <div class="terminal-body"><span class="prompt">R1#</span> <span class="cmd">configure terminal</span>
+<span class="prompt">R1(config)#</span> <span class="cmd">ip route 192.168.10.0 255.255.255.0 10.0.0.10</span>
+<span class="comment">!</span>
+<span class="comment">! The /26 mask, not /24.</span>
+<span class="prompt">R1(config)#</span> <span class="cmd">ip route 192.168.30.0 255.255.255.192 10.0.0.10</span>
+<span class="prompt">R1(config)#</span> <span class="cmd">ip route 192.168.99.0 255.255.255.0 10.0.0.10</span>
+<span class="prompt">R1(config)#</span> <span class="cmd">ipv6 route 2001:db8:acad:10::/64 2001:db8:acad:ff03::2</span>
+<span class="prompt">R1(config)#</span> <span class="cmd">ipv6 route 2001:db8:acad:30::/64 2001:db8:acad:ff03::2</span>
+<span class="prompt">R1(config)#</span> <span class="cmd">ipv6 route 2001:db8:acad:99::/64 2001:db8:acad:ff03::2</span>
+<span class="prompt">R1(config)#</span> <span class="cmd">end</span>
+<span class="prompt">R1#</span> <span class="cmd">copy running-config startup-config</span></div>
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">D1 · everything else is through R1</span></div>
+      <div class="terminal-body"><span class="prompt">D1#</span> <span class="cmd">configure terminal</span>
+<span class="prompt">D1(config)#</span> <span class="cmd">ip route 0.0.0.0 0.0.0.0 10.0.0.9</span>
+<span class="prompt">D1(config)#</span> <span class="cmd">ipv6 route ::/0 2001:db8:acad:ff03::1</span>
+<span class="prompt">D1(config)#</span> <span class="cmd">end</span>
+<span class="prompt">D1#</span> <span class="cmd">copy running-config startup-config</span></div>
+    </div>
+    <p><strong>R2 needs nothing.</strong> Its default route already sends every HQ-bound packet to R1, and R1 now knows the way to D1.</p>
+    <h3 class="sub">8 · Clear the stale caches</h3>
+    <p>The PCs and switches may still have <strong>R1's MAC address</strong> cached for <code>192.168.10.1</code>, <code>.30.1</code> and <code>.99.1</code>. The address is the same, but the box behind it isn't. If a ping to the gateway fails right after the swap, clear the cache: <code>arp -d</code> on PC-A, PC-C and PC-D, and <code>clear arp-cache</code> on S1 and S2. Real devices usually fix this on their own, because a new SVI announces itself with a gratuitous ARP. Packet Tracer may not.</p>
+  </section>
+
+  <!-- VERIFY 3B -->
+  <section id="l3-verify">
+    <div class="section-head">
+      <p class="kicker">Module 4.3 · Part 3B</p>
+      <h2>Verify the Layer 3 switch</h2>
+      <p>The proof that the swap worked is a traceroute: the first hop is the same address as before, but now it's D1 answering.</p>
+    </div>
+    <h3 class="sub">D1: are the SVIs up?</h3>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">D1 · interfaces (trimmed)</span></div>
+      <div class="terminal-body"><span class="prompt">D1#</span> <span class="cmd">show ip interface brief</span>
+<span class="out">Interface              IP-Address      OK? Method Status                Protocol</span>
+<span class="out">GigabitEthernet1/0/1   unassigned      YES unset  up                    up</span>
+<span class="out">GigabitEthernet1/0/2   unassigned      YES unset  administratively down down</span>
+<span class="out">...</span>
+<span class="hl">GigabitEthernet1/0/24  10.0.0.10       YES manual up                    up</span>
+<span class="out">...</span>
+<span class="hl">Vlan10                 192.168.10.1    YES manual up                    up</span>
+<span class="hl">Vlan30                 192.168.30.1    YES manual up                    up</span>
+<span class="hl">Vlan99                 192.168.99.1    YES manual up                    up</span></div>
+    </div>
+    <p><strong>All three SVIs up/up is the success check.</strong> <code>up down</code> means the VLAN doesn't exist on D1, or no active port carries it. <code>administratively down</code> means a forgotten <code>no shutdown</code>. The full output lists every one of D1's 28 ports; it's trimmed here.</p>
+    <h3 class="sub">D1: the routing table</h3>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">D1 · routes</span></div>
+      <div class="terminal-body"><span class="prompt">D1#</span> <span class="cmd">show ip route</span>
+<span class="out">...</span>
+<span class="hl">Gateway of last resort is 10.0.0.9 to network 0.0.0.0</span>
+
+<span class="out">      10.0.0.0/30 is subnetted, 1 subnets</span>
+<span class="out">C        10.0.0.8 is directly connected, GigabitEthernet1/0/24</span>
+<span class="hl">C     192.168.10.0/24 is directly connected, Vlan10</span>
+<span class="out">      192.168.30.0/26 is subnetted, 1 subnets</span>
+<span class="hl">C        192.168.30.0 is directly connected, Vlan30</span>
+<span class="hl">C     192.168.99.0/24 is directly connected, Vlan99</span>
+<span class="out">S*    0.0.0.0/0 [1/0] via 10.0.0.9</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong>One <code>C</code> route per SVI</strong>, plus one for the routed port. To the routing table, an SVI is a routed interface.</li>
+      <li><strong><code>S*</code> is the provided default route.</strong> The <code>*</code> marks it as the candidate default, which is why the gateway of last resort is set.</li>
+      <li>Your screen may differ: Packet Tracer's 3650 may also print <code>L</code> (local) lines and "variably subnetted" headings, like R1 does.</li>
+    </ul>
+    <h3 class="sub">The gateway moved. The trace didn't.</h3>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">PC-A · trace to PC-D, Part 3B</span></div>
+      <div class="terminal-body"><span class="prompt">C:\&gt;</span> <span class="cmd">tracert 192.168.30.9</span>
+
+<span class="out">Tracing route to 192.168.30.9 over a maximum of 30 hops:</span>
+
+<span class="hl">  1   0 ms      0 ms      0 ms      192.168.10.1</span>
+<span class="out">  2   0 ms      0 ms      0 ms      192.168.30.9</span>
+
+<span class="out">Trace complete.</span></div>
+    </div>
+    <p><strong>Identical to the Part 3A trace.</strong> Hop 1 is still <code>192.168.10.1</code>, but now it's D1's Vlan10 SVI answering, not R1. The packet never leaves the HQ switches: S1 to D1, routed inside D1, then back down to S1, across to S2, and out to PC-D. What changed? The box, not the address.</p>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">PC-A · trace to SRV1, Part 3B</span></div>
+      <div class="terminal-body"><span class="prompt">C:\&gt;</span> <span class="cmd">tracert 192.168.20.100</span>
+
+<span class="out">Tracing route to 192.168.20.100 over a maximum of 30 hops:</span>
+
+<span class="out">  1   0 ms      0 ms      0 ms      192.168.10.1</span>
+<span class="hl">  2   0 ms      0 ms      0 ms      10.0.0.9</span>
+<span class="out">  3   0 ms      0 ms      0 ms      10.0.0.2</span>
+<span class="out">  4   0 ms      0 ms      0 ms      192.168.20.100</span>
+
+<span class="out">Trace complete.</span></div>
+    </div>
+    <p><strong>One more hop than in Part 3A:</strong> D1, then R1 (answering from <code>10.0.0.9</code>, its end of the new link), then R2, then SRV1. Each router answers from the interface the trace arrived on.</p>
+    <table class="spec">
+      <thead><tr><th>Also test</th><th>What it proves</th></tr></thead>
+      <tbody>
+        <tr><td>D1 → <code>ping 192.168.20.100</code></td><td>D1's default route out, and R2's default route back</td></tr>
+        <tr><td>PC-D → <code>www.it141.example</code></td><td>VLAN 30 through D1, R1 and R2</td></tr>
+        <tr><td>PC-A → <code>ssh -l admin 192.168.10.1</code></td><td><strong>The prompt says <code>D1&gt;</code></strong>, not R1. Same address, new box.</td></tr>
+        <tr><td>PC-A → <code>ssh -l admin 192.168.99.11</code></td><td>Management is still reachable, now through D1</td></tr>
+        <tr><td>PC-B → <code>ping 192.168.30.9</code></td><td>The Shipping site reaches HQ: R2's default route, R1's static route, then D1</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- WHICH DOOR DRILL -->
+  <section id="whichdoor">
+    <div class="section-head">
+      <p class="kicker">Drill</p>
+      <h2>Which door?</h2>
+      <p>The most common inter-VLAN routing mistake isn't a command. It's a host, or a switch, pointed at the wrong gateway. Pick the right one.</p>
+    </div>
+    <div class="tool" id="doorTool">
+      <p class="tool-title">Drill · Which door?</p>
+      <p style="margin:0 0 10px; font-size:.9rem;">A device on today's network needs its default gateway set. Which address is right?</p>
+      <div class="sorter-case" id="doorCase"></div>
+      <div class="sorter-btns" id="doorBtns"></div>
+      <div class="tool-out" id="doorOut"></div>
+      <div class="toolbar" style="margin:12px 0 0;">
+        <button class="btn" id="doorNext">Next device</button>
+        <span id="doorScore" style="font-family:var(--mono); font-size:.85rem; opacity:.75;"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- TROUBLESHOOT -->
+  <section id="troubleshoot">
+    <div class="section-head">
+      <p class="kicker">Module 4.4</p>
+      <h2>Troubleshoot inter-VLAN routing</h2>
+      <p>Work from the host outward: the host's own settings, its access port, the trunk, then the router or Layer 3 switch. Every fault below breaks something specific, and one command shows it.</p>
+    </div>
+    <table class="spec">
+      <thead><tr><th>Fault</th><th>Symptom</th><th>The command that shows it</th><th>Fix</th></tr></thead>
+      <tbody>
+        <tr><td><strong>1 · Wrong host gateway</strong><br>(PC-A gateway <code>192.168.10.254</code>)</td><td>PC-A reaches PC-C but nothing outside its subnet</td><td><code>ipconfig</code> on the PC</td><td>Set the gateway to its VLAN's <code>.1</code></td></tr>
+        <tr><td><strong>2 · Gateway set to another VLAN's door</strong><br>(PC-D gateway <code>192.168.10.1</code>)</td><td>PC-D reaches nothing outside <code>192.168.30.0/26</code>. It <em>can</em> ping <code>192.168.30.1</code>, which fools people: that's on its own subnet, so the gateway isn't used.</td><td><code>ipconfig</code>: the gateway isn't inside PC-D's own subnet</td><td><code>192.168.30.1</code>. A gateway must be inside the host's own subnet.</td></tr>
+        <tr><td><strong>3 · Subinterface VLAN mismatch</strong><br>(<code>.30</code> has <code>encapsulation dot1Q 3</code>)</td><td>VLAN 30 can't reach its gateway. <code>show ip interface brief</code> shows everything up/up.</td><td><code>show interfaces g0/0/1.30</code>: the <code>Vlan ID</code> is wrong</td><td><code>no encapsulation dot1Q</code>, then the right one, then <strong>re-enter the addresses</strong>: changing the encapsulation wipes them</td></tr>
+        <tr><td><strong>4 · The switch port to the router isn't a trunk</strong></td><td><strong>Every</strong> VLAN loses its gateway, even VLAN 10. Untagged frames all land on <code>.900</code>.</td><td><code>show interfaces trunk</code> on S1: Gig0/1 is missing</td><td><code>switchport mode trunk</code>, native 900, the allowed list, <code>nonegotiate</code></td></tr>
+        <tr><td><strong>5 · VLAN left off the allowed list</strong></td><td>Only that VLAN fails. In Part 3B, if D1's trunk is the one missing it, that VLAN's SVI on D1 also goes up/down.</td><td><code>show interfaces trunk</code>: the VLAN is missing from "allowed"</td><td><code>switchport trunk allowed vlan add 30</code></td></tr>
+        <tr><td><strong>6 · <code>ip routing</code> missing on D1</strong></td><td>Each host can ping its own gateway, but nothing crosses between VLANs</td><td><code>show ip route</code> on D1: no <code>C</code> routes</td><td><code>ip routing</code> (and <code>ipv6 unicast-routing</code> for IPv6)</td></tr>
+        <tr><td><strong>7 · SVI down</strong>: the VLAN doesn't exist on D1, or no active port carries it</td><td>That VLAN's hosts can't reach <code>.1</code></td><td><code>show ip interface brief</code>: <code>Vlan30</code> up/down. <code>show vlan brief</code> on D1: no VLAN 30.</td><td>Create the VLAN. Make sure the trunk is up and carries it.</td></tr>
+        <tr><td><strong>8 · Routed port left as a switch port</strong></td><td>D1 can't ping <code>10.0.0.9</code>; nothing leaves HQ. The <code>ip address</code> command was rejected when typed.</td><td><code>show ip interface brief</code>: G1/0/24 <code>unassigned</code></td><td><code>no switchport</code>, then the addresses again</td></tr>
+        <tr><td><strong>9 · Physical interface shut</strong> (R1 G0/0/1)</td><td>Every HQ VLAN loses its gateway at once</td><td><code>show ip interface brief</code>: G0/0/1 <code>administratively down</code>, and every subinterface down with it</td><td><code>no shutdown</code> on the <strong>physical</strong> interface</td></tr>
+        <tr><td><strong>10 · Old address left on the physical port</strong> (R1 G0/0/1 still <code>192.168.10.1</code>)</td><td>The <code>.10</code> subinterface's address was rejected as overlapping, so VLAN 10 has no gateway. VLANs 30 and 99 are fine.</td><td><code>show ip interface brief</code>: G0/0/1 still has <code>192.168.10.1</code>, and <code>.10</code> is <code>unassigned</code></td><td><code>no ip address</code> and <code>no ipv6 address</code> on G0/0/1, then the addresses on <code>.10</code></td></tr>
+      </tbody>
+    </table>
+    <div class="teach-note">
+      <span class="label">Read the pattern</span>
+      Which VLANs are broken tells you where to look. <strong>One VLAN</strong> broken: that VLAN's subinterface or SVI, its allowed-list entry, or one host. <strong>Every VLAN</strong> broken: the shared piece, which is the trunk to the router, the router's physical port, or <code>ip routing</code>. <strong>One host</strong> broken while its neighbors work: that host's settings or its access port.
+    </div>
+  </section>
+
+  <!-- FAULT HUNT -->
+  <section id="faulthunt">
+    <div class="section-head">
+      <p class="kicker">The Wrong Door</p>
+      <h2>Fault hunt</h2>
+      <p>Each config below has one bug. Find it before you open the answer. These are the same kinds of faults NetAcad's troubleshooting activity (4.4.8) plants.</p>
+    </div>
+    <div class="tool door-q">
+      <p class="tool-title">Door 1</p>
+      <p style="margin:0 0 10px; font-size:.92rem;"><strong>Symptom:</strong> After Part 3A, PC-D (VLAN 30) can't ping <code>192.168.30.1</code>. VLANs 10 and 99 work. R1's <code>show ip interface brief</code> shows every subinterface up/up.</p>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">R1 · show running-config (part)</span></div>
+      <div class="terminal-body"><span class="prompt">R1#</span> <span class="cmd">show running-config</span>
+<span class="out">...</span>
+<span class="out">interface GigabitEthernet0/0/1.10</span>
+<span class="out"> encapsulation dot1Q 10</span>
+<span class="out"> ip address 192.168.10.1 255.255.255.0</span>
+<span class="out">interface GigabitEthernet0/0/1.30</span>
+<span class="out"> encapsulation dot1Q 3</span>
+<span class="out"> ip address 192.168.30.1 255.255.255.192</span>
+<span class="out">interface GigabitEthernet0/0/1.99</span>
+<span class="out"> encapsulation dot1Q 99</span>
+<span class="out"> ip address 192.168.99.1 255.255.255.0</span></div>
+    </div>
+      <div class="choices">
+        <button class="choice">A. The /26 mask on .30 is wrong</button>
+        <button class="choice" data-right="1">B. .30 is tagged for VLAN 3, not 30</button>
+        <button class="choice">C. .30 needs no shutdown</button>
+        <button class="choice">D. The subinterface number must be 3</button>
+      </div>
+      <div class="tool-out door-why" hidden><p style="margin:10px 0 0; font-size:.9rem;"><strong>B.</strong> The subinterface name is only a label. The <code>encapsulation dot1Q</code> number decides which frames it hears, and nothing arrives tagged 3. The /26 is correct (A), up/up rules out C, and the number doesn't have to match anything (D). <code>show interfaces g0/0/1.30</code> shows <code>Vlan ID 3</code>.</p></div>
+    </div>
+    <div class="tool door-q">
+      <p class="tool-title">Door 2</p>
+      <p style="margin:0 0 10px; font-size:.92rem;"><strong>Symptom:</strong> After Part 3A, <strong>nobody</strong> at HQ can reach their gateway, not even VLAN 10, which worked all through Session 2.</p>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · show running-config interface g0/1</span></div>
+      <div class="terminal-body"><span class="prompt">S1#</span> <span class="cmd">show running-config interface g0/1</span>
+<span class="out">interface GigabitEthernet0/1</span>
+<span class="out"> description Trunk to R1 G0/0/1</span>
+<span class="out"> switchport access vlan 10</span>
+<span class="out"> switchport mode access</span></div>
+    </div>
+      <div class="choices">
+        <button class="choice">A. VLAN 10 doesn&#x27;t exist on S1</button>
+        <button class="choice" data-right="1">B. S1 G0/1 is still an access port, so R1 never sees a tag</button>
+        <button class="choice">C. R1 needs an IP address on the physical G0/0/1</button>
+        <button class="choice">D. The native VLAN must be 1</button>
+      </div>
+      <div class="tool-out door-why" hidden><p style="margin:10px 0 0; font-size:.9rem;"><strong>B.</strong> R1's subinterfaces expect tagged frames. An access port sends them untagged, so everything lands on <code>.900</code>, which has no address. The description says "Trunk", but descriptions don't configure anything. <code>show interfaces trunk</code> shows no Gig0/1. C would actually break <code>.10</code> (fault 10).</p></div>
+    </div>
+    <div class="tool door-q">
+      <p class="tool-title">Door 3</p>
+      <p style="margin:0 0 10px; font-size:.92rem;"><strong>Symptom:</strong> After Part 3B, PC-A reaches <code>192.168.10.1</code> and PC-C. PC-D reaches <code>192.168.30.1</code>. But PC-A can't ping PC-D, and nobody reaches SRV1.</p>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">D1 · what routing is on?</span></div>
+      <div class="terminal-body"><span class="prompt">D1#</span> <span class="cmd">show running-config | include routing</span>
+<span class="out">ipv6 unicast-routing</span></div>
+    </div>
+      <div class="choices">
+        <button class="choice">A. The SVIs need no shutdown</button>
+        <button class="choice">B. D1 needs a default route</button>
+        <button class="choice" data-right="1">C. ip routing was never entered</button>
+        <button class="choice">D. PC-D&#x27;s gateway is wrong</button>
+      </div>
+      <div class="tool-out door-why" hidden><p style="margin:10px 0 0; font-size:.9rem;"><strong>C.</strong> Only the IPv6 routing command is there. Without <code>ip routing</code>, D1 answers on each SVI but forwards nothing between them. Both gateways answer, which rules out A and D. PC-A to PC-D never uses a default route, because both subnets are directly connected to D1, which rules out B.</p></div>
+    </div>
+    <div class="tool door-q">
+      <p class="tool-title">Door 4</p>
+      <p style="margin:0 0 10px; font-size:.92rem;"><strong>Symptom:</strong> After Part 3B, PC-A and PC-D can ping each other, but nobody at HQ reaches SRV1. D1 can't ping <code>10.0.0.9</code>.</p>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">D1 · show running-config interface g1/0/24</span></div>
+      <div class="terminal-body"><span class="prompt">D1#</span> <span class="cmd">show running-config interface g1/0/24</span>
+<span class="out">interface GigabitEthernet1/0/24</span>
+<span class="out"> description Routed link to R1 G0/0/1</span></div>
+    </div>
+      <div class="choices">
+        <button class="choice">A. R1 needs a route to 192.168.30.0/26</button>
+        <button class="choice" data-right="1">B. no switchport was never entered, so the port has no address</button>
+        <button class="choice">C. The trunk to S1 is missing VLAN 30</button>
+        <button class="choice">D. D1&#x27;s default route points to the wrong address</button>
+      </div>
+      <div class="tool-out door-why" hidden><p style="margin:10px 0 0; font-size:.9rem;"><strong>B.</strong> The port is still a switch port, so the <code>ip address</code> command was rejected, and nobody noticed. <code>show ip interface brief</code> shows G1/0/24 <code>unassigned</code>. A and D only matter once the link works. Inter-VLAN traffic works, which rules out C. Fix: <code>no switchport</code>, then the addresses.</p></div>
+    </div>
+  </section>
+
+  <!-- WHAT WORKS NOW -->
+  <section id="reach">
+    <div class="section-head">
+      <p class="kicker">End of session</p>
+      <h2>What works now, and what doesn't</h2>
+      <p>Test every row of this table in Packet Tracer before you leave.</p>
+    </div>
+    <table class="spec">
+      <thead><tr><th>From → To</th><th>Result</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>PC-A ↔ PC-D (VLAN 10 ↔ VLAN 30)</td><td><strong>Works</strong></td><td>D1 routes between its SVIs</td></tr>
+        <tr><td>PC-A → S1 or S2 (SSH <code>192.168.99.11</code> / <code>.12</code>)</td><td><strong>Works</strong></td><td>Session 2's cliffhanger is closed. The switches' gateway, <code>.99.1</code>, is D1.</td></tr>
+        <tr><td>PC-A → <code>ssh 192.168.10.1</code></td><td>Reaches <strong>D1</strong></td><td>Same address, new box</td></tr>
+        <tr><td>Any HQ PC → SRV1, <code>www.it141.example</code>, PC-B, S3</td><td>Works</td><td>D1 → R1 → R2</td></tr>
+        <tr><td>PC-B → any HQ host</td><td>Works</td><td>R2's default route → R1's static route → D1</td></tr>
+        <tr><td>IPv6: PC-A ↔ PC-D, HQ → SRV1</td><td>Works</td><td><code>ipv6 unicast-routing</code> on D1, plus the provided IPv6 routes</td></tr>
+        <tr><td>S1 or S2 over IPv6</td><td>No</td><td>The 2960 SVIs are still IPv4-only</td></tr>
+        <tr><td>DHCP for anyone</td><td>No</td><td>Static addresses only. DHCPv4 arrives in Session 6.</td></tr>
+        <tr><td>HQ if S1 G0/1 fails</td><td><strong>All of HQ is cut off</strong></td><td>S1 G0/1 is D1's only link to the access switches. S2 reaches D1 only through S1.</td></tr>
+      </tbody>
+    </table>
+    <div class="teach-note preview">
+      <span class="label">Coming up in Session 4: a second hallway</span>
+      Right now S2 reaches D1 only through S1. If the S1–S2 trunk fails, S2's whole floor is cut off. Next session adds a cable from S2 straight to D1. That makes a triangle, and a triangle of switches is a loop. Module 5 is about the protocol that keeps a loop from flooding the building.
+    </div>
+  </section>
+
+  <!-- THE TICKET -->
+  <section id="ticket">
+    <div class="section-head">
+      <p class="kicker">Recurring segment</p>
+      <h2>The Ticket</h2>
+      <p>Turn it into steps before you open Packet Tracer.</p>
+    </div>
+    <div class="ticket-card">
+      <p class="tag">Ticket #141-03 · Priority: medium · From: Logistics</p>
+      <p>Since the new switch went in, PC-D can print to the shared printer in our own office, but it can't get to anything at Front Desk or the website. Nobody touched PC-D. Somebody said "the gateway" but we don't know what that means.</p>
+    </div>
+    <details class="solution"><summary>One way to break it down</summary><div class="solbody">
+      <ol>
+        <li><strong>"Can reach our own office"</strong>: same-VLAN traffic works, so PC-D's access port, its VLAN, and its address and mask are probably fine. The problem is anything that needs a gateway.</li>
+        <li>Check PC-D's settings first: <code>ipconfig</code>. The gateway must be <code>192.168.30.1</code>, and the mask must be <code>/26</code> (<code>255.255.255.192</code>). A gateway of <code>192.168.10.1</code> is the wrong door, and it's outside PC-D's subnet, so PC-D can't reach it at all.</li>
+        <li>If the PC is right, check the door itself on D1: <code>show ip interface brief | include Vlan30</code>. It should be <code>up up</code> with <code>192.168.30.1</code>. If it's down, check that VLAN 30 exists on D1 (<code>show vlan brief</code>) and that it crosses the D1–S1 trunk and the S1–S2 trunk (<code>show interfaces trunk</code>, "allowed and active").</li>
+        <li>"Nobody touched PC-D" while "the new switch went in" points at D1, not the PC. Did <code>ip routing</code> make it into D1's config? Without it, D1 won't route between the VLANs at all.</li>
+        <li>Verify: from PC-D, <code>ping 192.168.30.1</code>, then <code>ping 192.168.10.10</code> (PC-A), then <code>tracert 192.168.20.100</code> (SRV1). The first hop should be <code>192.168.30.1</code>.</li>
+      </ol>
+    </div></details>
+  </section>
+
+  <!-- CHECKPOINT -->
+  <section id="checkpoint">
+    <div class="section-head">
+      <p class="kicker">Before Session 4</p>
+      <h2>Checkpoint: Module 4</h2>
+      <p>If you can do these cold, you're ready for the module-group exam on Modules 1–4.</p>
+    </div>
+    <ul class="obj-list">
+      <li>Why traffic between VLANs needs routing, and what each host's gateway must be</li>
+      <li>The three inter-VLAN routing methods, with one advantage and one limit of each</li>
+      <li>Router-on-a-stick from memory: the switch trunk, then each subinterface's <code>encapsulation dot1Q</code> and address, including the native VLAN</li>
+      <li>Why <code>encapsulation dot1Q</code> must come before the IP address, and what happens to the subinterfaces when the physical interface is shut</li>
+      <li>Layer 3 switch routing from memory: <code>ip routing</code>, SVIs, and a routed port with <code>no switchport</code></li>
+      <li>The two reasons an SVI stays down</li>
+      <li>Read <code>show ip interface brief</code>, <code>show interfaces trunk</code>, and <code>show ip route</code> for an inter-VLAN fault</li>
+      <li>Every fault in <a href="#troubleshoot">Troubleshoot</a>, and the one command that shows it. Practice with <a href="#doorTool">Which door?</a> and the <a href="#faulthunt">Fault hunt</a>.</li>
+    </ul>
+  </section>
+
+  <!-- FLASHCARDS -->
+  <section id="flashcards">
+    <div class="section-head">
+      <p class="kicker">Study</p>
+      <h2>Flashcards</h2>
+      <p>Click to flip. Double-click to mark as known.</p>
+    </div>
+    <div class="toolbar">
+      <button class="btn" id="shuffleBtn">Shuffle</button>
+      <button class="btn" id="resetKnownBtn">Reset progress</button>
+      <span id="cardProgress"></span>
+    </div>
+    <div class="card-grid" id="cardGrid"></div>
+  </section>
+
+  <!-- QUIZ -->
+  <section id="quiz">
+    <div class="section-head">
+      <p class="kicker">Check yourself</p>
+      <h2>Sample questions</h2>
+      <p>Pick an answer to see if you're right. Same style as the module-group exam.</p>
+    </div>
+    <div id="quizScore"></div>
+    <div id="quizList"></div>
+    <button class="btn" id="resetQuizBtn">Reset quiz</button>
+  </section>
+
+  <!-- EXAMPLES -->
+  <section id="examples">
+    <div class="section-head">
+      <p class="kicker">Applied</p>
+      <h2>Worked examples</h2>
+      <p>Think it through before you expand the answer.</p>
+    </div>
+
+    <div class="example">
+      <span class="tag">Gateways</span>
+      <h3>Same subnet, wrong door</h3>
+      <p>PC-D (<code>192.168.30.9/26</code>) has its gateway set to <code>192.168.30.62</code>. It can ping PC-D's neighbors in VLAN 30, but nothing else. Its address and mask are right. What's wrong, and why doesn't the PC complain?</p>
+      <details class="solution"><summary>Show answer</summary><div class="solbody">
+        <p><code>192.168.30.62</code> is inside PC-D's subnet (usable .1–.62), so nothing about the setting looks wrong. But nothing owns that address: the gateway is <code>192.168.30.1</code>. PC-D ARPs for .62, nobody answers, and every packet for another network goes nowhere. A host doesn't check that its gateway is the right address, or that anything owns it. Fix: set the gateway to <code>192.168.30.1</code>.</p>
+      </div></details>
+    </div>
+
+    <div class="example">
+      <span class="tag">Subinterfaces</span>
+      <h3>The number that doesn't matter</h3>
+      <p>A classmate configures <code>interface g0/0/1.30</code> with <code>encapsulation dot1Q 10</code> and <code>ip address 192.168.30.1 255.255.255.192</code>. Their <code>g0/0/1.10</code> is correct. What breaks?</p>
+      <details class="solution"><summary>Show answer</summary><div class="solbody">
+        <p>On a real router, IOS refuses <code>encapsulation dot1Q 10</code> on <code>.30</code>, because VLAN 10 already belongs to <code>.10</code>. Then the <code>ip address</code> line is refused too, because <code>.30</code> has no encapsulation. Packet Tracer may accept both; check. Either way, nothing answers for VLAN 30's tag, so PC-D can't reach <code>192.168.30.1</code>. The <code>.30</code> in the name is only a label. The <code>encapsulation dot1Q</code> line is what matters. <code>show interfaces g0/0/1.30</code>, or <code>show running-config</code>, shows which subinterface has which VLAN.</p>
+      </div></details>
+    </div>
+
+    <div class="example">
+      <span class="tag">Layer 3 switch</span>
+      <h3>Everything's up, nothing routes</h3>
+      <p>On D1, <code>show ip interface brief</code> shows Vlan10, Vlan30 and Vlan99 all up/up with the right addresses. PC-A can ping <code>192.168.10.1</code>, and PC-D can ping <code>192.168.30.1</code>. But PC-A can't ping PC-D. What did someone forget?</p>
+      <details class="solution"><summary>Show answer</summary><div class="solbody">
+        <p><code>ip routing</code>. Without it, a Layer 3 switch answers on each SVI like a host would, but it won't forward packets between them. <code>show ip route</code> is the giveaway: without <code>ip routing</code> there are no <code>C</code> routes for the SVIs. Real IOS prints a short "Default gateway is not set" table instead. Turn it on in global config.</p>
+      </div></details>
+    </div>
+
+    <div class="example">
+      <span class="tag">Routed ports</span>
+      <h3>The port that wouldn't take an address</h3>
+      <p>On D1, <code>interface g1/0/24</code>, then <code>ip address 10.0.0.10 255.255.255.252</code>, gives an error. Why?</p>
+      <details class="solution"><summary>Show answer</summary><div class="solbody">
+        <p>It's still a switch port, and switch ports don't have IP addresses: they belong to a VLAN. Run <code>no switchport</code> first to make it a routed port, then add the address.</p>
+      </div></details>
+    </div>
+
+    <div class="example">
+      <span class="tag">The swap</span>
+      <h3>Why didn't the PCs notice?</h3>
+      <p>Between Part 3A and Part 3B, nobody changed a single setting on PC-A, PC-C or PC-D. Explain why they still work, and why a ping right after the swap might fail once.</p>
+      <details class="solution"><summary>Show answer</summary><div class="solbody">
+        <p>The hosts only know their gateway's <strong>IP address</strong>, and D1's SVIs use the same addresses R1's subinterfaces used. What changed is the <strong>MAC address</strong> behind that IP. A host that cached R1's MAC for <code>192.168.10.1</code> keeps sending to it until the ARP entry times out or is cleared. That's why the first pings can fail, and why <code>arp -d</code> on the PC fixes it straight away.</p>
+      </div></details>
+    </div>
+  </section>
+
+  <!-- GLOSSARY -->
+  <section id="glossary">
+    <div class="section-head">
+      <p class="kicker">Reference</p>
+      <h2>Glossary &amp; index</h2>
+      <p>Every term from this session. Search, or jump by letter.</p>
+    </div>
+    <input type="text" id="glossarySearch" placeholder="Search terms…" aria-label="Search glossary">
+    <div class="alpha-nav" id="alphaNav"></div>
+    <dl class="glossary" id="glossaryList"></dl>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>IT141 · CCNA: Switching, Routing, and Wireless Essentials · Session 3 reference.</p>
+    <p class="license-note">© 2026 Zan Dick (<a href="https://github.com/KevinSays/osi-company-switching">KevinSays</a>), Mountwest Community &amp; Technical College · Content: <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/">CC BY-NC-SA 4.0</a> · Code: <a href="https://github.com/KevinSays/osi-company-switching/blob/main/LICENSE">MIT</a> · Cisco, NetAcad, CCNA and Packet Tracer are trademarks of Cisco; this site is not affiliated with or endorsed by Cisco.</p>
+  </div>
+</footer>
+
+<button id="backToTop" class="back-to-top" aria-label="Back to top" title="Back to top">↑</button>
+
+<script>
+  /* ---- which door? ---- */
+  (function(){
+    const DOORS = ['192.168.10.1','192.168.30.1','192.168.99.1','192.168.20.1','10.0.0.9'];
+    const CASES = [
+      { who:'PC-A', where:'S1 F0/1, VLAN 10, <code>192.168.10.10/24</code>', a:'192.168.10.1',
+        why:'VLAN 10\'s door. In Part 3A that address is R1 G0/0/1.10; in Part 3B it\'s D1 Vlan10. Same address either way.' },
+      { who:'PC-C', where:'S2 F0/1, VLAN 10, <code>192.168.10.11/24</code>', a:'192.168.10.1',
+        why:'PC-C is on a different switch from PC-A, but the same VLAN, so it uses the same door. The trunks carry it there.' },
+      { who:'PC-D', where:'S2 F0/11, VLAN 30, <code>192.168.30.9/26</code>', a:'192.168.30.1',
+        why:'VLAN 30\'s door. Any address outside 192.168.30.0/26 can\'t be PC-D\'s gateway, because a host can only reach its gateway directly, inside its own subnet.' },
+      { who:'S1 (the switch itself)', where:'management SVI Vlan99, <code>192.168.99.11/24</code>', a:'192.168.99.1',
+        why:'A 2960 doesn\'t route, so it needs <code>ip default-gateway</code> to answer SSH from other VLANs. Its management address is in VLAN 99, so its door is VLAN 99\'s.' },
+      { who:'S2 (the switch itself)', where:'management SVI Vlan99, <code>192.168.99.12/24</code>', a:'192.168.99.1',
+        why:'Same as S1: the management VLAN\'s door. Pointing a switch at 192.168.10.1 is a classic mistake: that address isn\'t in the switch\'s own subnet.' },
+      { who:'PC-B', where:'Shipping & Receiving, S3 F0/1, <code>192.168.20.10/24</code>', a:'192.168.20.1',
+        why:'PC-B isn\'t at HQ at all. Its door is R2 G0/0/1, unchanged since CCNA 1. Nothing in today\'s work touches the Shipping site.' },
+      { who:'SRV1', where:'Shipping & Receiving, S3 F0/2, <code>192.168.20.100/24</code>', a:'192.168.20.1',
+        why:'Same site as PC-B, same door: R2.' },
+      { who:'A new Logistics laptop', where:'S2 F0/15, VLAN 30, <code>192.168.30.20/26</code>', a:'192.168.30.1',
+        why:'The port decides the VLAN, and the VLAN decides the door. F0/11–20 are VLAN 30 on S2, so it\'s Logistics\' door.' },
+      { who:'D1\'s way out of HQ', where:'not a host: the default route on D1 (Part 3B)', a:'10.0.0.9',
+        why:'D1 routes, so it doesn\'t use a default gateway. It uses a default route pointing at R1\'s end of the routed link, 10.0.0.9.' },
+    ];
+    const caseEl = document.getElementById('doorCase'), btns = document.getElementById('doorBtns'),
+          out = document.getElementById('doorOut'), scoreEl = document.getElementById('doorScore');
+    let right = 0, done = 0, n = 0, last = -1;
+    function show(){
+      n++;
+      let i;
+      do { i = Math.floor(Math.random()*CASES.length); } while (i === last && CASES.length > 1);
+      last = i;
+      const c = CASES[i];
+      caseEl.innerHTML = `<span class="count">Device ${n}</span><strong>${c.who}</strong><br>${c.where}`;
+      out.innerHTML = ''; btns.innerHTML = ''; delete btns.dataset.done;
+      DOORS.forEach(k => {
+        const el = document.createElement('button');
+        el.className = 'choice'; el.textContent = k;
+        el.addEventListener('click', () => {
+          if (btns.dataset.done) return;
+          btns.dataset.done = '1'; done++;
+          if (k === c.a) right++;
+          Array.from(btns.children).forEach(x => {
+            x.disabled = true;
+            if (x.textContent === c.a) x.classList.add('correct');
+            else if (x.textContent === k) x.classList.add('incorrect');
+          });
+          out.innerHTML = `<div class="row"><b>${k === c.a ? 'Right' : 'It\'s ' + c.a}</b><span>${c.why}</span></div>`;
+          scoreEl.textContent = `${right} / ${done} right`;
+        });
+        btns.appendChild(el);
+      });
+    }
+    document.getElementById('doorNext').addEventListener('click', show);
+    show();
+  })();
+
+  /* ---- fault hunt: one pick per door, then show why ---- */
+  document.querySelectorAll('.door-q').forEach(q => {
+    const btns = q.querySelectorAll('.choice'), why = q.querySelector('.door-why');
+    btns.forEach(b => b.addEventListener('click', () => {
+      if (q.dataset.done) return;
+      q.dataset.done = '1';
+      btns.forEach(x => {
+        x.disabled = true;
+        if (x.dataset.right) x.classList.add('correct');
+        else if (x === b) x.classList.add('incorrect');
+      });
+      why.hidden = false;
+    }));
+  });
+
+  const TERMS = [
+    {t:"Default gateway", d:"The address a host sends everything for other networks to. It must be inside the host's own subnet: with VLANs, that means its own VLAN's subinterface or SVI."},
+    {t:"encapsulation dot1Q", d:"The subinterface command that names the VLAN tag the subinterface answers to. Must come before the IP address. Add native for the native VLAN's subinterface."},
+    {t:"Gratuitous ARP", d:"An ARP reply nobody asked for, announcing an IP-to-MAC mapping. A new gateway can send one so hosts update their caches."},
+    {t:"Inter-VLAN routing", d:"Routing traffic between VLANs. Each VLAN is its own subnet, so traffic between them needs a router or a Layer 3 switch."},
+    {t:"ip routing", d:"The global command that turns on IPv4 routing on a Layer 3 switch. Without it, the switch won't forward packets between its SVIs. ipv6 unicast-routing does the same for IPv6."},
+    {t:"Layer 3 switch", d:"A switch that can also route, in hardware. Uses SVIs as VLAN gateways and routed ports for links to routers. Ours is D1, a Catalyst 3650."},
+    {t:"Legacy inter-VLAN routing", d:"One physical router interface per VLAN, each cabled to an access port in that VLAN. Doesn't scale; not used in modern networks."},
+    {t:"no switchport", d:"Turns a port on a Layer 3 switch into a routed port, so it can take an IP address."},
+    {t:"Routed port", d:"A physical port on a Layer 3 switch that acts like a router interface: no VLAN, its own IP address. Set with no switchport."},
+    {t:"Router-on-a-stick", d:"Inter-VLAN routing with one router interface, split into subinterfaces, connected to one switch trunk."},
+    {t:"Subinterface", d:"A logical interface inside a physical one, such as G0/0/1.30. In router-on-a-stick, one per VLAN, each with that VLAN's gateway address. Goes down when the physical interface does."},
+    {t:"SVI", d:"Switch virtual interface: interface vlan N. On a 2960, a management address. On a Layer 3 switch, a VLAN's routed gateway. Up only if the VLAN exists and has an active port."},
+    {t:"switchport trunk encapsulation dot1q", d:"Sets 802.1Q as the trunk encapsulation on a switch that supports more than one. Packet Tracer's 3650 needs it before switchport mode trunk; the 2960 has no such command."},
+    {t:"Trunk to the router", d:"In router-on-a-stick, the switch port facing the router must be an 802.1Q trunk carrying every routed VLAN, with the same native VLAN as the router's native subinterface."},
+  ];
+
+  const QUIZ = [
+    { q:"Why does traffic between two VLANs need a Layer 3 device?",
+      choices:["Each VLAN is a separate broadcast domain and subnet, so traffic between them must be routed","Switches can't forward tagged frames","VLANs use different MAC address formats","Trunks only carry one VLAN at a time"], correct:0,
+      explain:"A VLAN is its own broadcast domain and its own subnet. Moving between subnets is routing, so a router or Layer 3 switch has to do it." },
+    { q:"Which is a characteristic of legacy inter-VLAN routing?",
+      choices:["It uses one subinterface per VLAN","It uses SVIs on a Layer 3 switch","It uses one physical router interface for each VLAN","It needs an 802.1Q trunk to the router"], correct:2,
+      explain:"Legacy routing gives each VLAN its own router port and its own access port. That's why it doesn't scale." },
+    { q:"In a router-on-a-stick design, how must the switch port connected to the router be configured?",
+      choices:["As an access port in the native VLAN","As an 802.1Q trunk","As a routed port with no switchport","As an access port in VLAN 1"], correct:1,
+      explain:"The one link carries every VLAN, so it must be a trunk. An access port would carry only one VLAN to the router." },
+    { q:"Which command associates subinterface G0/0/1.30 with VLAN 30?",
+      choices:["switchport access vlan 30","vlan 30","ip address 192.168.30.1 255.255.255.192 vlan 30","encapsulation dot1Q 30"], correct:3,
+      explain:"encapsulation dot1Q 30 tells the subinterface which tag it answers to. The .30 in the name is only a label." },
+    { q:"An administrator types ip address 192.168.30.1 255.255.255.192 on a new subinterface and gets an error. What is the most likely cause?",
+      choices:["The physical interface is shut down","The encapsulation dot1Q command hasn't been entered yet","The subinterface number doesn't match the VLAN","The switch port isn't a trunk yet"], correct:1,
+      explain:"A subinterface needs to know its VLAN before it will take an IP address, so encapsulation dot1Q comes first." },
+    { q:"R1's physical interface G0/0/1 is administratively down. What is the state of its subinterfaces?",
+      choices:["They stay up, because each has its own no shutdown","Only the native VLAN subinterface stays up","They are down, because subinterfaces depend on the physical interface","They move to the next physical interface"], correct:2,
+      explain:"Subinterfaces inherit the physical interface's state. Enable the physical interface with no shutdown." },
+    { q:"What is the correct default gateway for a host in VLAN 30 in a router-on-a-stick design?",
+      choices:["The IP address of the subinterface for VLAN 30","The IP address of the switch's management SVI","The IP address of the router's physical interface","Any address in the VLAN 30 subnet"], correct:0,
+      explain:"Each VLAN's hosts use that VLAN's subinterface address. Any other address is the wrong door." },
+    { q:"Which command must be entered on a Layer 3 switch so that it routes between its SVIs?",
+      choices:["no switchport","ip default-gateway","ip routing","switchport mode trunk"], correct:2,
+      explain:"ip routing turns on IPv4 routing. Without it, the SVIs answer pings but traffic isn't forwarded between VLANs." },
+    { q:"Which command turns a Layer 3 switch port into a routed port?",
+      choices:["no switchport","switchport mode routed","ip routing","encapsulation dot1Q"], correct:0,
+      explain:"no switchport removes the port from Layer 2 switching, so it can take an IP address like a router interface." },
+    { q:"What is one advantage of Layer 3 switch inter-VLAN routing over router-on-a-stick?",
+      choices:["It needs no VLANs","It works without IP addresses","Routing between VLANs is done in switch hardware, without sending traffic over one shared link to a router","It doesn't need SVIs"], correct:2,
+      explain:"In router-on-a-stick, every routed packet crosses one link twice. A Layer 3 switch routes internally, at hardware speed." },
+    { q:"On a Layer 3 switch, interface vlan 30 has an address and no shutdown, but shows up/down. Which is a likely cause?",
+      choices:["ip routing hasn't been entered","VLAN 30 doesn't exist on the switch, or no port in VLAN 30 is up","The SVI needs encapsulation dot1Q 30","The routed port is shut down"], correct:1,
+      explain:"Once it isn't shut, an SVI's line protocol comes up only when its VLAN exists and at least one port in that VLAN (an access port or a trunk carrying it) is up and forwarding." },
+    { q:"PC-D in VLAN 30 can ping other VLAN 30 hosts but not hosts in VLAN 10. Its IP address and mask are correct. What should be checked first?",
+      choices:["The VLAN 10 hosts' MAC addresses","The DTP mode of the trunk","PC-D's default gateway","The switch's hostname"], correct:2,
+      explain:"Same-VLAN traffic works, so the port and address are fine. Traffic to another VLAN uses the gateway, so check that first." },
+  ];
+</script>
