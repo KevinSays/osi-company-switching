@@ -11,7 +11,7 @@
   <div class="wrap">
     <p class="eyebrow">IT141 · SESSION 4 · FIELD NOTES</p>
     <h1>STP: The Loop</h1>
-    <p class="lede">A second cable is a backup. A second cable that makes a circle is a disaster waiting to happen, because Ethernet frames have no TTL and will go round forever. This session, S2 gets its own link to D1, the three HQ switches form a triangle, and nothing melts, because Spanning Tree quietly closed one door before anyone noticed. Your job is to find out which door, and then to decide for yourself which switch is in charge.</p>
+    <p class="lede">A second cable is a backup. A second cable that makes a circle is a disaster waiting to happen, because Ethernet frames have no TTL and will go round forever. This session, S2 gets its own link to D1, the three HQ switches form a triangle, and nothing melts, because Spanning Tree quietly closed one door before anyone noticed. This session is about how they choose which door to close, which switch ends up in charge, and what happens when a cable is cut.</p>
     <div class="factrow">
       <span class="fact"><b>Exam</b> Module group 1–4</span>
       <span class="fact"><b>New material</b> Module 5 — STP Concepts</span>
@@ -27,17 +27,16 @@
     <a href="#overview">Overview</a>
     <a href="#exam">Exam Review</a>
     <a href="#why">Why STP</a>
-    <a href="#trunk">The New Trunk</a>
     <a href="#election">The Election</a>
-    <a href="#default">Default Root</a>
-    <a href="#design">Design the Root</a>
-    <a href="#verify">Verify</a>
+    <a href="#read">Reading the Output</a>
+    <a href="#root">Choosing the Root</a>
     <a href="#rootdrill">Election Drill</a>
     <a href="#states">States &amp; Timers</a>
-    <a href="#failover">Failover</a>
+    <a href="#failover">Link Failure</a>
     <a href="#variants">STP Variants</a>
     <a href="#portfast">PortFast</a>
     <a href="#alternatives">Alternatives</a>
+    <a href="#lab">Lab</a>
     <a href="#mistakes">Common Mistakes</a>
     <a href="#reach">What Works Now</a>
     <a href="#ticket">The Ticket</a>
@@ -64,17 +63,17 @@
     </div>
     <ul class="obj-list">
       <li>Explain how redundant Layer 2 links cause broadcast storms, MAC table instability, and duplicate frames</li>
-      <li>Describe how STP prevents loops by blocking redundant ports</li>
-      <li>Explain how the bridge ID, root path cost, and port ID elect the root bridge and assign root, designated, and alternate ports</li>
-      <li>Find the root bridge and every port's role and state with <code>show spanning-tree</code></li>
-      <li>Make a chosen switch the root with <code>root primary</code> and <code>root secondary</code>, and predict the result</li>
-      <li>Describe the STP port states and timers, and how long 802.1D takes to converge</li>
+      <li>Explain how STP keeps redundant links without loops, by blocking ports and unblocking them when a link fails</li>
+      <li>Describe how the bridge ID, root path cost, and port ID elect the root bridge and assign root, designated, and alternate ports</li>
+      <li>Read the root bridge, port roles, and port states in <code>show spanning-tree</code> output</li>
+      <li>Describe the 802.1D port states and timers, and why convergence takes 30 to 50 seconds</li>
       <li>Compare STP, PVST+, RSTP, Rapid PVST+, MSTP, and MST</li>
       <li>Explain what PortFast and BPDU guard do, and name the alternatives to STP</li>
+      <li><strong>In the lab:</strong> close the HQ triangle, find the root STP chose on its own, and watch a blocked port take over when a link fails</li>
     </ul>
     <div class="teach-note">
-      <span class="label">The network this session</span>
-      One change is already made in today's Packet Tracer file: a new cable from <strong>S2 G0/1</strong> to <strong>D1 G1/0/3</strong>. Both ends are still parked (VLAN 999, shut), so nothing has happened yet. You turn them into a trunk, and that closes the triangle: S1 to D1, S2 to D1, and S1 to S2. Nobody has touched Spanning Tree on any switch. It's on by default, and today you find out what it decided on its own.
+      <span class="label">Topology used on this page</span>
+      HQ as it stood at the end of Session 3, plus one new trunk: <strong>S2 G0/1 to D1 G1/0/3</strong>. That closes a triangle. S1–D1 and S2–D1 are Gigabit links (G0/1 on each 2960, G1/0/1 and G1/0/3 on D1), and S1–S2 is the Fast Ethernet trunk from Session 2 (F0/23 at both ends). The examples use the tree HQ is <strong>designed</strong> to have: D1 is the root bridge and S1 is the backup, so the one blocked port is <strong>S2 F0/23</strong>. The MAC addresses in the output are made up. The <a href="#lab">lab</a> at the end of the page builds it in Packet Tracer.
     </div>
   </section>
 
@@ -120,67 +119,7 @@
       </tbody>
     </table>
     <p><strong>Spanning Tree Protocol</strong> fixes all four the same way. It <strong>logically blocks</strong> just enough ports that there's exactly one active path between any two switches, so the cabling is a loop but the forwarding is a tree. If an active link fails, STP <strong>unblocks</strong> a port to restore a path. Two hallways are safer than one, as long as nobody walks in circles.</p>
-    <div class="teach-note warn">
-      <span class="label">See it: the storm (instructor demo)</span>
-      Your instructor will show a real broadcast storm on the projector, from a throwaway copy of today's finished network, in Simulation mode. Spanning Tree is turned off for VLAN 10 on all three switches (<code>no spanning-tree vlan 10</code>), PC-A clears its ARP cache and pings PC-C, and the ARP broadcast is stepped through: out of S1 both ways, copies crossing at S2 and D1, copies coming back to S1, and an event list that never ends. In Packet Tracer, only VLAN 10 melts: PC-D in VLAN 30 can still reach its gateway, because PVST+ runs a separate tree for each VLAN, and only one was turned off. On real switches, don't count on it: VLAN 10's storm fills the shared trunks and D1's CPU (its Vlan10 SVI receives every broadcast), so the other VLANs suffer too.
-    </div>
-    <p><strong>Don't try this in your own file.</strong> A storm can make Packet Tracer stop responding. If you ever find a <code>no spanning-tree vlan</code> line in a config, the fix is <code>spanning-tree vlan</code> with the same VLAN number (here, <code>spanning-tree vlan 10</code>) on every switch, then <code>clear mac address-table dynamic</code>.</p>
-  </section>
-
-  <!-- THE NEW TRUNK -->
-  <section id="trunk">
-    <div class="section-head">
-      <p class="kicker">Lab</p>
-      <h2>The new trunk: S2 G0/1 ↔ D1 G1/0/3</h2>
-      <p>Configure <strong>both</strong> ends completely while they're still shut, and only then <code>no shutdown</code>. If one end comes up as a trunk while the other is still an access port in VLAN 999, the native VLANs don't match, and you get mismatch messages and a blocked port.</p>
-    </div>
-    <div class="terminal">
-      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S2 · G0/1 becomes a trunk to D1</span></div>
-      <div class="terminal-body"><span class="prompt">S2#</span> <span class="cmd">configure terminal</span>
-<span class="prompt">S2(config)#</span> <span class="cmd">interface g0/1</span>
-<span class="prompt">S2(config-if)#</span> <span class="cmd">description Trunk to D1 G1/0/3</span>
-<span class="prompt">S2(config-if)#</span> <span class="hl">switchport mode trunk</span>
-<span class="prompt">S2(config-if)#</span> <span class="cmd">switchport trunk native vlan 900</span>
-<span class="prompt">S2(config-if)#</span> <span class="cmd">switchport trunk allowed vlan 10,30,99,900</span>
-<span class="prompt">S2(config-if)#</span> <span class="cmd">switchport nonegotiate</span>
-<span class="comment">!</span>
-<span class="comment">! Tidy-up, as in Session 3: the parking VLAN line does nothing on a trunk.</span>
-<span class="prompt">S2(config-if)#</span> <span class="cmd">no switchport access vlan</span>
-<span class="prompt">S2(config-if)#</span> <span class="hl">no shutdown</span>
-<span class="prompt">S2(config-if)#</span> <span class="cmd">end</span>
-<span class="prompt">S2#</span> <span class="cmd">copy running-config startup-config</span></div>
-    </div>
-    <div class="terminal">
-      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">D1 · G1/0/3 becomes a trunk to S2</span></div>
-      <div class="terminal-body"><span class="prompt">D1#</span> <span class="cmd">configure terminal</span>
-<span class="prompt">D1(config)#</span> <span class="cmd">interface g1/0/3</span>
-<span class="prompt">D1(config-if)#</span> <span class="cmd">description Trunk to S2 G0/1</span>
-<span class="comment">!</span>
-<span class="comment">! The PT 3650 wants the encapsulation set before trunk mode (Session 3).</span>
-<span class="prompt">D1(config-if)#</span> <span class="cmd">switchport trunk encapsulation dot1q</span>
-<span class="prompt">D1(config-if)#</span> <span class="hl">switchport mode trunk</span>
-<span class="prompt">D1(config-if)#</span> <span class="cmd">switchport trunk native vlan 900</span>
-<span class="prompt">D1(config-if)#</span> <span class="cmd">switchport trunk allowed vlan 10,30,99,900</span>
-<span class="prompt">D1(config-if)#</span> <span class="cmd">switchport nonegotiate</span>
-<span class="prompt">D1(config-if)#</span> <span class="cmd">no switchport access vlan</span>
-<span class="prompt">D1(config-if)#</span> <span class="hl">no shutdown</span>
-<span class="prompt">D1(config-if)#</span> <span class="cmd">end</span>
-<span class="prompt">D1#</span> <span class="cmd">copy running-config startup-config</span></div>
-    </div>
-    <ul class="obj-list">
-      <li><strong>Exactly the settings of the other two trunks:</strong> the same native VLAN, the same allowed list, and <code>nonegotiate</code> on both static ends. HQ now has three trunks and six trunk ends, and every one must match.</li>
-      <li><strong>The link comes up, then waits.</strong> The new ports go through listening (15 s) and learning (15 s) before they forward, or they end up blocking. Give it about 30 seconds.</li>
-      <li><strong>There's a loop now, and nothing melted.</strong> STP was already running, and it closed one door before you could see it.</li>
-      <li><strong>The gateways now have two legs.</strong> D1's SVIs stay up as long as <em>either</em> G1/0/1 or G1/0/3 carries their VLANs.</li>
-    </ul>
-    <div class="terminal">
-      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S2 · quick check</span></div>
-      <div class="terminal-body"><span class="prompt">S2#</span> <span class="cmd">show interfaces trunk</span>
-<span class="out">Port        Mode             Encapsulation  Status        Native vlan</span>
-<span class="hl">Fa0/23      on               802.1q         trunking      900</span>
-<span class="hl">Gig0/1      on               802.1q         trunking      900</span>
-<span class="out">...</span></div>
-    </div>
+    <p>PVST+, the version on our switches, runs a separate tree for every VLAN, so a loop left open in one VLAN (for example, with STP turned off there) doesn't automatically melt the others. On real switches the storm still fills the trunks and the CPUs they share, so the other VLANs suffer too.</p>
   </section>
 
   <!-- THE ELECTION -->
@@ -199,184 +138,32 @@
       <li>Priorities can only be set in <strong>multiples of 4096</strong> (0, 4096, 8192, … 61440). The other 12 bits of the field are the VLAN number.</li>
     </ul>
     <h3 class="sub">Step 2 · One root port on every other switch</h3>
-    <p>Each non-root switch picks the one port with the lowest <strong>root path cost</strong>: the total of the port costs on the way to the root, counting the cost of each port that <em>receives</em> the root's BPDUs. On our switches, a Gigabit port costs <strong>4</strong> and a Fast Ethernet port costs <strong>19</strong>.</p>
+    <p>Each non-root switch picks the one port with the lowest <strong>root path cost</strong>: the total of the port costs on the way to the root, counting the cost of each port that <em>receives</em> the root's BPDUs. A port's cost comes from its speed. Faster is cheaper.</p>
+    <table class="spec">
+      <thead><tr><th>Link speed</th><th>Short cost (our switches)</th><th>Long cost</th></tr></thead>
+      <tbody>
+        <tr><td>10 Gbps</td><td class="mono">2</td><td class="mono">2,000</td></tr>
+        <tr><td>1 Gbps</td><td class="mono"><strong>4</strong></td><td class="mono">20,000</td></tr>
+        <tr><td>100 Mbps (Fast Ethernet)</td><td class="mono"><strong>19</strong></td><td class="mono">200,000</td></tr>
+        <tr><td>10 Mbps</td><td class="mono">100</td><td class="mono">2,000,000</td></tr>
+      </tbody>
+    </table>
+    <p>The <strong>short</strong> values are the classic 802.1D costs and the 2960's default. The <strong>long</strong> values come from a newer edition of the standard, with room for faster links. Every switch in a network should use the same method, or their totals can't be compared.</p>
     <h3 class="sub">Step 3 · One designated port on every link</h3>
     <p>Each link gets one <strong>designated port</strong>: the end on the switch that's closer to the root (lower root path cost). Every port on the root bridge is designated, and so is every port facing a host.</p>
     <h3 class="sub">Step 4 · Whatever's left blocks</h3>
     <p>Any port that's neither a root port nor a designated port is an <strong>alternate port</strong>, and it <strong>blocks</strong>. It still listens to BPDUs, so it can take over if something fails.</p>
     <div class="teach-note">
       <span class="label">Ties, in order</span>
-      When two candidates have the same root path cost, STP compares, in order: the <strong>lower sender bridge ID</strong>, then the <strong>lower sender port ID</strong> (port priority, default 128, then port number). Notice <em>sender</em>: it's the neighbor's numbers that count, not your own. With one cable between each pair of switches, the bridge ID always settles it. The port ID only matters when two cables run between the same two switches.
+      When two candidates have the same root path cost, STP compares, in order: the <strong>lower sender bridge ID</strong>, then the <strong>lower sender port ID</strong> (port priority, default 128, then port number). Notice <em>sender</em>: it's the neighbor's numbers that count, not the receiving switch's own. With one cable between each pair of switches, the bridge ID always settles it. The port ID only matters when two cables run between the same two switches.
     </div>
-  </section>
-
-  <!-- DEFAULT ROOT -->
-  <section id="default">
-    <div class="section-head">
-      <p class="kicker">Module 5.2 · Lab</p>
-      <h2>Find the default root</h2>
-      <p>Nobody has configured STP. Run <code>show spanning-tree vlan 10</code> on all three switches and work out who won. <strong>Your answer may differ from the example below,</strong> because Packet Tracer gives each switch a random MAC address when it's placed, and the MACs on this page are made up. Everyone opens the same starting file, so your neighbor should get the same answer you do. The example is one possible result, where S2 happened to have the lowest MAC.</p>
-    </div>
-    <div class="terminal">
-      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S2 · in this example, the root</span></div>
-      <div class="terminal-body"><span class="prompt">S2#</span> <span class="cmd">show spanning-tree vlan 10</span>
-<span class="out">VLAN0010</span>
-<span class="out">  Spanning tree enabled protocol ieee</span>
-<span class="out">  Root ID    Priority    32778</span>
-<span class="out">             Address     0002.16AA.0012</span>
-<span class="hl">             This bridge is the root</span>
-<span class="out">             Hello Time  2 sec  Max Age 20 sec  Forward Delay 15 sec</span>
-
-<span class="out">  Bridge ID  Priority    32778  (priority 32768 sys-id-ext 10)</span>
-<span class="out">             Address     0002.16AA.0012</span>
-<span class="out">             Hello Time  2 sec  Max Age 20 sec  Forward Delay 15 sec</span>
-<span class="out">             Aging Time  20</span>
-
-<span class="out">Interface        Role Sts Cost      Prio.Nbr Type</span>
-<span class="out">---------------- ---- --- --------- -------- --------------------------------</span>
-<span class="out">Fa0/1            Desg FWD 19        128.1    P2p</span>
-<span class="out">Fa0/23           Desg FWD 19        128.23   P2p</span>
-<span class="out">Gi0/1            Desg FWD 4         128.25   P2p</span></div>
-    </div>
-    <div class="terminal">
-      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">D1</span></div>
-      <div class="terminal-body"><span class="prompt">D1#</span> <span class="cmd">show spanning-tree vlan 10</span>
-<span class="out">VLAN0010</span>
-<span class="out">  Spanning tree enabled protocol ieee</span>
-<span class="out">  Root ID    Priority    32778</span>
-<span class="out">             Address     0002.16AA.0012</span>
-<span class="hl">             Cost        4</span>
-<span class="hl">             Port        3(GigabitEthernet1/0/3)</span>
-<span class="out">             Hello Time  2 sec  Max Age 20 sec  Forward Delay 15 sec</span>
-
-<span class="out">  Bridge ID  Priority    32778  (priority 32768 sys-id-ext 10)</span>
-<span class="out">             Address     00D0.97CC.00D1</span>
-<span class="out">             Hello Time  2 sec  Max Age 20 sec  Forward Delay 15 sec</span>
-<span class="out">             Aging Time  20</span>
-
-<span class="out">Interface        Role Sts Cost      Prio.Nbr Type</span>
-<span class="out">---------------- ---- --- --------- -------- --------------------------------</span>
-<span class="out">Gi1/0/1          Desg FWD 4         128.1    P2p</span>
-<span class="out">Gi1/0/3          Root FWD 4         128.3    P2p</span></div>
-    </div>
-    <div class="terminal">
-      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1</span></div>
-      <div class="terminal-body"><span class="prompt">S1#</span> <span class="cmd">show spanning-tree vlan 10</span>
-<span class="out">VLAN0010</span>
-<span class="out">  Spanning tree enabled protocol ieee</span>
-<span class="out">  Root ID    Priority    32778</span>
-<span class="out">             Address     0002.16AA.0012</span>
-<span class="out">             Cost        8</span>
-<span class="out">             Port        25(GigabitEthernet0/1)</span>
-<span class="out">             Hello Time  2 sec  Max Age 20 sec  Forward Delay 15 sec</span>
-
-<span class="out">  Bridge ID  Priority    32778  (priority 32768 sys-id-ext 10)</span>
-<span class="out">             Address     0060.47BB.0011</span>
-<span class="out">             Hello Time  2 sec  Max Age 20 sec  Forward Delay 15 sec</span>
-<span class="out">             Aging Time  20</span>
-
-<span class="out">Interface        Role Sts Cost      Prio.Nbr Type</span>
-<span class="out">---------------- ---- --- --------- -------- --------------------------------</span>
-<span class="out">Fa0/1            Desg FWD 19        128.1    P2p</span>
-<span class="hl">Fa0/23           Altn BLK 19        128.23   P2p</span>
-<span class="out">Gi0/1            Root FWD 4         128.25   P2p</span></div>
-    </div>
-    <p>In this file, <strong>S2 won</strong> (its MAC, <code>0002.16AA.0012</code>, is the lowest), and <strong>S1 F0/23 blocks</strong>. Your MAC addresses, and possibly your root, will differ. If D1's Cost column shows <code>20000</code> instead of <code>4</code>, your D1 is using the newer "long" cost values; that can change which port blocks before the design, but not after it.</p>
-    <h3 class="sub">How to read it</h3>
-    <table class="spec">
-      <thead><tr><th>Part of the output</th><th>What it tells you</th></tr></thead>
-      <tbody>
-        <tr><td><code>VLAN0010</code></td><td>This is <strong>one</strong> tree. VLANs 30, 99 and 900 each have their own (that's PVST+).</td></tr>
-        <tr><td><code>protocol ieee</code></td><td>PVST+, using 802.1D rules. Rapid PVST+ says <code>rstp</code> (Session 5).</td></tr>
-        <tr><td><strong>Root ID</strong> block</td><td>Who <strong>this switch believes</strong> is the root, and how far away it is. The same Root ID on all three switches means they agree.</td></tr>
-        <tr><td><strong>Bridge ID</strong> block</td><td><strong>This switch itself.</strong> <code>(priority 32768 sys-id-ext 10)</code> shows the split: the configured priority plus the VLAN.</td></tr>
-        <tr><td><code>This bridge is the root</code></td><td>Only on the root, in place of Cost and Port. Quickest test: the Root ID address equals the Bridge ID address.</td></tr>
-        <tr><td><code>Cost 8</code> (in the Root ID block)</td><td>This switch's <strong>root path cost</strong>, the total to the root</td></tr>
-        <tr><td><code>Port 25(GigabitEthernet0/1)</code></td><td>This switch's <strong>root port</strong></td></tr>
-        <tr><td>Role column</td><td><code>Root</code> root port · <code>Desg</code> designated · <code>Altn</code> alternate</td></tr>
-        <tr><td>Sts column</td><td><code>FWD</code> forwarding · <code>BLK</code> blocking · <code>LSN</code> listening · <code>LRN</code> learning</td></tr>
-        <tr><td>Cost column</td><td><strong>This port's own cost</strong>: 19 for Fast Ethernet, 4 for Gigabit. Not the path cost.</td></tr>
-        <tr><td><code>Prio.Nbr</code></td><td>The <strong>port ID</strong>: port priority (128) and port number. On a 2960, Gi0/1 is port 25.</td></tr>
-      </tbody>
-    </table>
-    <div class="teach-note warn">
-      <span class="label">The two misreadings</span>
-      <strong>1. Root ID vs Bridge ID.</strong> On S1, "Root ID Priority 32778" is the <em>root's</em> priority as S1 heard it. S1's own is in the Bridge ID block. <strong>2. The Cost column vs the root path cost.</strong> The column is per port. The root path cost is the <code>Cost</code> line in the Root ID block.
-    </div>
-    <h3 class="sub">Work it out by hand</h3>
-    <p>In this example S2 is root. Every one of S2's ports is designated. Then:</p>
-    <ul class="obj-list">
-      <li><strong>D1's root port:</strong> straight to S2 through G1/0/3 costs <strong>4</strong>. Through S1 costs 4 + 19 = 23. Root port: G1/0/3.</li>
-      <li><strong>S1's root port:</strong> straight to S2 through F0/23 costs <strong>19</strong>. Through D1 costs 4 (S1 G0/1) + 4 (D1 G1/0/3) = <strong>8</strong>. Root port: <strong>G0/1</strong>. Two Gigabit hops beat one Fast Ethernet hop.</li>
-      <li><strong>Designated ports:</strong> S2's ends of both its links (it's root), and D1 G1/0/1 on the D1–S1 link, because S1's end is its root port.</li>
-      <li><strong>Left over: S1 F0/23.</strong> Alternate, blocking.</li>
-    </ul>
-    <p>Now fill this in for <strong>your</strong> file, VLAN 10. There must be exactly one <code>BLK</code> port in the table, and it can't be on the root.</p>
-    <table class="spec">
-      <thead><tr><th>Switch</th><th>Root?</th><th>Root path cost</th><th>Root port</th><th>Every trunk port: role / state</th></tr></thead>
-      <tbody>
-        <tr><td>D1</td><td></td><td></td><td></td><td>G1/0/1: · G1/0/3:</td></tr>
-        <tr><td>S1</td><td></td><td></td><td></td><td>F0/23: · G0/1:</td></tr>
-        <tr><td>S2</td><td></td><td></td><td></td><td>F0/23: · G0/1:</td></tr>
-      </tbody>
-    </table>
-  </section>
-
-  <!-- DESIGN -->
-  <section id="design">
-    <div class="section-head">
-      <p class="kicker">Module 5.2 · Lab</p>
-      <h2>Design the root: you choose the boss</h2>
-      <p>The root should be the switch at the center of traffic, not the one with the lowest serial number. At HQ that's D1: it holds every gateway, so every frame that leaves a VLAN goes there anyway. S1 is the backup.</p>
-    </div>
-    <div class="terminal">
-      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">D1 · become root for every VLAN on the triangle</span></div>
-      <div class="terminal-body"><span class="prompt">D1#</span> <span class="cmd">configure terminal</span>
-<span class="comment">!</span>
-<span class="comment">! The distribution switch, where the gateways live, becomes root for every VLAN the triangle carries.</span>
-<span class="prompt">D1(config)#</span> <span class="hl">spanning-tree vlan 10,30,99,900 root primary</span>
-<span class="prompt">D1(config)#</span> <span class="cmd">end</span>
-<span class="prompt">D1#</span> <span class="cmd">copy running-config startup-config</span></div>
-    </div>
-    <div class="terminal">
-      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · the backup root</span></div>
-      <div class="terminal-body"><span class="prompt">S1#</span> <span class="cmd">configure terminal</span>
-<span class="comment">!</span>
-<span class="comment">! S1 takes over if D1 fails.</span>
-<span class="prompt">S1(config)#</span> <span class="hl">spanning-tree vlan 10,30,99,900 root secondary</span>
-<span class="prompt">S1(config)#</span> <span class="cmd">end</span>
-<span class="prompt">S1#</span> <span class="cmd">copy running-config startup-config</span></div>
-    </div>
-    <p>S2: nothing. It keeps the default, 32768. After each command the tree is recalculated, and ports may sit in <code>LSN</code> or <code>LRN</code> for up to 50 seconds. Pings across HQ can drop while that happens. Wait before you check.</p>
-    <ul class="obj-list">
-      <li><strong>Why these four VLANs:</strong> 10, 30, 99 and 900 are carried by all three trunks, so they're the VLANs with a loop. VLAN 900 has no hosts, but it's on every trunk, so it has a tree like the others. VLANs 1 and 999 have no active ports, so there's no tree to run.</li>
-      <li><strong>VLAN 40</strong> joins the list in Session 10, when it's created.</li>
-    </ul>
-    <h3 class="sub"><code>root primary</code> vs typing the priority</h3>
-    <table class="spec">
-      <thead><tr><th></th><th><code>root primary</code> / <code>root secondary</code></th><th><code>priority 24576</code> / <code>priority 28672</code></th></tr></thead>
-      <tbody>
-        <tr><td>What it is</td><td>A <strong>macro</strong> that runs once, when you type it</td><td>A plain setting</td></tr>
-        <tr><td>What it sets</td><td><strong>24576</strong>, unless the current root is already at 24576 or lower: then 4096 below it. Secondary sets <strong>28672</strong>.</td><td>Exactly what you typed</td></tr>
-        <tr><td>Saved in the config as</td><td>The resulting <code>priority</code> line, not "root primary"</td><td>The same line</td></tr>
-        <tr><td>If someone later sets a lower priority elsewhere</td><td>Doesn't react: the other switch takes over</td><td>Same</td></tr>
-      </tbody>
-    </table>
-    <div class="terminal">
-      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">D1 · what the macro actually saved</span></div>
-      <div class="terminal-body"><span class="prompt">D1#</span> <span class="cmd">show running-config | include spanning-tree</span>
-<span class="out">spanning-tree mode pvst</span>
-<span class="out">spanning-tree extend system-id</span>
-<span class="hl">spanning-tree vlan 10,30,99,900 priority 24576</span></div>
-    </div>
-    <p>The exam asks about <code>root primary</code> and <code>root secondary</code>, so use them in the lab. In production many engineers type the priority directly, because you can read exactly what you'll get. Either way, the config ends up the same.</p>
-    <h3 class="sub">Predict every port before you look</h3>
-    <p>D1 is 24576 (24586 in VLAN 10), S1 is 28672 (28682), S2 is 32768 (32778).</p>
+    <h3 class="sub">The election on HQ</h3>
+    <p>HQ's priorities: D1 <strong>24576</strong>, S1 <strong>28672</strong>, S2 the default <strong>32768</strong> (<a href="#root">Choosing the root</a> explains why those three). In VLAN 10 they show as 24586, 28682 and 32778.</p>
     <ul class="obj-list">
       <li><strong>Root: D1,</strong> on priority alone. Both its ports are designated.</li>
       <li><strong>S1's root port: G0/1,</strong> cost 4. The other way, F0/23 through S2, costs 19 + 4 = 23.</li>
-      <li><strong>S2's root port: G0/1,</strong> cost 4. The same reasoning.</li>
-      <li><strong>The S1–S2 link</strong> needs one designated port. Both switches advertise a cost of 4: a tie. Next tie-breaker, bridge ID: S1's 28682 beats S2's 32778. <strong>S1 F0/23 is designated.</strong> That's exactly what <code>root secondary</code> bought you.</li>
+      <li><strong>S2's root port: G0/1,</strong> cost 4, by the same reasoning.</li>
+      <li><strong>The S1–S2 link</strong> needs one designated port. Both switches advertise a cost of 4: a tie. Next tie-breaker, bridge ID: S1's 28682 beats S2's 32778, so <strong>S1 F0/23 is designated.</strong></li>
       <li><strong>Left over: S2 F0/23.</strong> Alternate, blocking.</li>
     </ul>
     <table class="spec">
@@ -390,15 +177,15 @@
         <tr><td>S2</td><td>F0/23</td><td><strong>Alternate</strong></td><td><strong>BLK</strong></td><td>Lost the tie on bridge ID</td></tr>
       </tbody>
     </table>
-    <p><strong>One consequence:</strong> PC-A to PC-C, both in VLAN 10, now goes S1 → D1 → S2, not straight across the cable that connects their switches. The direct link is the backup.</p>
+    <p><strong>One consequence:</strong> PC-A to PC-C, both in VLAN 10, goes S1 → D1 → S2, not straight across the cable that connects their switches. The direct link is the backup.</p>
   </section>
 
-  <!-- VERIFY -->
-  <section id="verify">
+  <!-- READING THE OUTPUT -->
+  <section id="read">
     <div class="section-head">
-      <p class="kicker">Module 5.2 · Lab</p>
-      <h2>Verify the designed tree</h2>
-      <p>Same command, all three switches. Check your prediction port by port.</p>
+      <p class="kicker">Module 5.2</p>
+      <h2>Reading <code>show spanning-tree</code></h2>
+      <p><code>show spanning-tree vlan 10</code> shows one switch's view of one tree. Here is HQ's VLAN 10 tree from two sides: D1, the root, and S2, the switch with the blocked port.</p>
     </div>
     <div class="terminal">
       <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">D1 · the root</span></div>
@@ -419,28 +206,6 @@
 <span class="out">---------------- ---- --- --------- -------- --------------------------------</span>
 <span class="out">Gi1/0/1          Desg FWD 4         128.1    P2p</span>
 <span class="out">Gi1/0/3          Desg FWD 4         128.3    P2p</span></div>
-    </div>
-    <div class="terminal">
-      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · the backup root</span></div>
-      <div class="terminal-body"><span class="prompt">S1#</span> <span class="cmd">show spanning-tree vlan 10</span>
-<span class="out">VLAN0010</span>
-<span class="out">  Spanning tree enabled protocol ieee</span>
-<span class="out">  Root ID    Priority    24586</span>
-<span class="out">             Address     00D0.97CC.00D1</span>
-<span class="out">             Cost        4</span>
-<span class="out">             Port        25(GigabitEthernet0/1)</span>
-<span class="out">             Hello Time  2 sec  Max Age 20 sec  Forward Delay 15 sec</span>
-
-<span class="out">  Bridge ID  Priority    28682  (priority 28672 sys-id-ext 10)</span>
-<span class="out">             Address     0060.47BB.0011</span>
-<span class="out">             Hello Time  2 sec  Max Age 20 sec  Forward Delay 15 sec</span>
-<span class="out">             Aging Time  20</span>
-
-<span class="out">Interface        Role Sts Cost      Prio.Nbr Type</span>
-<span class="out">---------------- ---- --- --------- -------- --------------------------------</span>
-<span class="out">Fa0/1            Desg FWD 19        128.1    P2p</span>
-<span class="hl">Fa0/23           Desg FWD 19        128.23   P2p</span>
-<span class="out">Gi0/1            Root FWD 4         128.25   P2p</span></div>
     </div>
     <div class="terminal">
       <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S2</span></div>
@@ -464,12 +229,33 @@
 <span class="hl">Fa0/23           Altn BLK 19        128.23   P2p</span>
 <span class="out">Gi0/1            Root FWD 4         128.25   P2p</span></div>
     </div>
+    <h3 class="sub">How to read it</h3>
+    <table class="spec">
+      <thead><tr><th>Part of the output</th><th>What it tells you</th></tr></thead>
+      <tbody>
+        <tr><td><code>VLAN0010</code></td><td>This is <strong>one</strong> tree. VLANs 30, 99 and 900 each have their own (that's PVST+).</td></tr>
+        <tr><td><code>protocol ieee</code></td><td>PVST+, using 802.1D rules. Rapid PVST+ says <code>rstp</code> (Session 5).</td></tr>
+        <tr><td><strong>Root ID</strong> block</td><td>Who <strong>this switch believes</strong> is the root, and how far away it is. The same Root ID on all three switches means they agree.</td></tr>
+        <tr><td><strong>Bridge ID</strong> block</td><td><strong>This switch itself.</strong> <code>(priority 32768 sys-id-ext 10)</code> shows the split: the configured priority plus the VLAN.</td></tr>
+        <tr><td><code>This bridge is the root</code></td><td>Only on the root, in place of Cost and Port. Quickest test: the Root ID address equals the Bridge ID address.</td></tr>
+        <tr><td><code>Cost 4</code> (in the Root ID block)</td><td>This switch's <strong>root path cost</strong>, the total to the root</td></tr>
+        <tr><td><code>Port 25(GigabitEthernet0/1)</code></td><td>This switch's <strong>root port</strong></td></tr>
+        <tr><td>Role column</td><td><code>Root</code> root port · <code>Desg</code> designated · <code>Altn</code> alternate</td></tr>
+        <tr><td>Sts column</td><td><code>FWD</code> forwarding · <code>BLK</code> blocking · <code>LSN</code> listening · <code>LRN</code> learning</td></tr>
+        <tr><td>Cost column</td><td><strong>This port's own cost</strong>: 19 for Fast Ethernet, 4 for Gigabit. Not the path cost.</td></tr>
+        <tr><td><code>Prio.Nbr</code></td><td>The <strong>port ID</strong>: port priority (128) and port number. On a 2960, Gi0/1 is port 25.</td></tr>
+      </tbody>
+    </table>
+    <div class="teach-note warn">
+      <span class="label">The two misreadings</span>
+      <strong>1. Root ID vs Bridge ID.</strong> On S2, "Root ID Priority 24586" is the <em>root's</em> priority, as S2 heard it. S2's own is in the Bridge ID block: 32778. <strong>2. The Cost column vs the root path cost.</strong> The column is per port. The root path cost is the <code>Cost</code> line in the Root ID block.
+    </div>
+    <h3 class="sub">What HQ's output says</h3>
     <ul class="obj-list">
-      <li><strong>The same Root ID on all three</strong> (24586 and D1's MAC): they agree.</li>
-      <li><strong>Bridge ID priorities 24586, 28682 and 32778:</strong> primary, secondary, default.</li>
-      <li><strong>One <code>BLK</code> in the whole network:</strong> S2 Fa0/23.</li>
-      <li><strong>Check the other VLANs too.</strong> <code>show spanning-tree vlan 30</code> shows the same roles with 24606, 28702 and 32798, and S2's host port is Fa0/11. VLANs 99 and 900 list only trunk ports, because they have no hosts.</li>
-      <li>Your MAC addresses will differ, and your screen's spacing may too.</li>
+      <li><strong>The same Root ID on every switch</strong> (24586 and D1's MAC): they agree on who the root is.</li>
+      <li><strong>Bridge ID priorities 24586, 28682 and 32778</strong> on D1, S1 and S2: the root, the backup, and the default.</li>
+      <li><strong>One <code>BLK</code> in the whole network:</strong> S2 Fa0/23. S1's end of that link, Fa0/23, is <code>Desg FWD</code>.</li>
+      <li><strong>Every VLAN has its own tree.</strong> <code>show spanning-tree vlan 30</code> shows the same roles with 24606, 28702 and 32798, and lists S2's VLAN 30 host port, Fa0/11. VLANs 99 and 900 list only trunk ports, because they have no hosts.</li>
     </ul>
     <div class="terminal">
       <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S2 · the trunk table tells the same story</span></div>
@@ -479,7 +265,72 @@
 <span class="hl">Fa0/23      none</span>
 <span class="out">Gig0/1      10,30,99,900</span></div>
     </div>
-    <p>Until today, the last block of <code>show interfaces trunk</code> always matched the allowed list. Now Fa0/23 is a working trunk that STP has blocked in every VLAN. In Packet Tracer's topology view, its link light is amber.</p>
+    <p>The last block of <code>show interfaces trunk</code> lists the VLANs each trunk actually forwards. Fa0/23 is a working trunk that STP has blocked in every VLAN, so it shows <code>none</code>. In Packet Tracer's topology view, its link light is amber.</p>
+  </section>
+
+  <!-- CHOOSING THE ROOT -->
+  <section id="root">
+    <div class="section-head">
+      <p class="kicker">Module 5.2</p>
+      <h2>Choosing the root bridge</h2>
+      <p>Left alone, every switch has priority 32768, so the switch with the lowest MAC address becomes root. A MAC address is basically a serial number, so the default root is luck. It might be the oldest, slowest switch in the closet.</p>
+    </div>
+    <h3 class="sub">Why the default root matters: an example</h3>
+    <p>Suppose HQ's switches all kept the default priority, and S2 happened to have the lowest MAC. S2 would be root, and every one of its ports would be designated. Then:</p>
+    <ul class="obj-list">
+      <li><strong>D1's root port:</strong> straight to S2 through G1/0/3 costs <strong>4</strong>. Through S1 costs 4 + 19 = 23. Root port: G1/0/3.</li>
+      <li><strong>S1's root port:</strong> straight to S2 through F0/23 costs <strong>19</strong>. Through D1 costs 4 (S1 G0/1) + 4 (D1 G1/0/3) = <strong>8</strong>. Root port: <strong>G0/1</strong>. Two Gigabit hops beat one Fast Ethernet hop.</li>
+      <li><strong>Designated ports:</strong> S2's ends of both its links (it's root), and D1 G1/0/1 on the D1–S1 link, because S1's end is its root port.</li>
+      <li><strong>Left over: S1 F0/23.</strong> Alternate, blocking.</li>
+    </ul>
+    <p>That tree has no loops, so it works. But its center is S2, an access switch with no gateways on it, and a different MAC would have given a different tree. Nobody chose it.</p>
+    <h3 class="sub">Where the root should be</h3>
+    <p>The root should be the switch at the center of traffic. At HQ that's <strong>D1</strong>: it holds every gateway, so every frame that leaves a VLAN goes there anyway. S1 is the natural backup. The way to get that tree is the <strong>priority</strong>, the one part of the bridge ID an administrator sets: give D1 a lower priority than anyone else, and S1 the next lowest. D1 at 24576 and S1 at 28672 produce the tree in <a href="#election">The election on HQ</a>.</p>
+    <div class="teach-note preview">
+      <span class="label">Beyond Module 5: the commands</span>
+      Module 5 explains the priority; it doesn't configure it. The commands are here because HQ uses them, and Session 5's Rapid PVST+ builds on this tree.
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">D1 · become root for every VLAN on the triangle</span></div>
+      <div class="terminal-body"><span class="prompt">D1#</span> <span class="cmd">configure terminal</span>
+<span class="comment">!</span>
+<span class="comment">! The distribution switch, where the gateways live, becomes root for every VLAN the triangle carries.</span>
+<span class="prompt">D1(config)#</span> <span class="hl">spanning-tree vlan 10,30,99,900 root primary</span>
+<span class="prompt">D1(config)#</span> <span class="cmd">end</span>
+<span class="prompt">D1#</span> <span class="cmd">copy running-config startup-config</span></div>
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · the backup root</span></div>
+      <div class="terminal-body"><span class="prompt">S1#</span> <span class="cmd">configure terminal</span>
+<span class="comment">!</span>
+<span class="comment">! S1 takes over if D1 fails.</span>
+<span class="prompt">S1(config)#</span> <span class="hl">spanning-tree vlan 10,30,99,900 root secondary</span>
+<span class="prompt">S1(config)#</span> <span class="cmd">end</span>
+<span class="prompt">S1#</span> <span class="cmd">copy running-config startup-config</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong>Why these four VLANs:</strong> 10, 30, 99 and 900 are carried by all three trunks, so they're the VLANs with a loop. VLAN 900 has no hosts, but it's on every trunk, so it has a tree like the others. VLANs 1 and 999 have no active ports, so there's no tree to run. VLAN 40 joins the list in Session 10, when it's created.</li>
+      <li><strong>S2 gets nothing.</strong> It keeps the default, 32768.</li>
+      <li><strong>The tree is recalculated</strong> after each command, and ports can sit in listening or learning for up to 50 seconds while it settles.</li>
+    </ul>
+    <h3 class="sub"><code>root primary</code> vs typing the priority</h3>
+    <table class="spec">
+      <thead><tr><th></th><th><code>root primary</code> / <code>root secondary</code></th><th><code>priority 24576</code> / <code>priority 28672</code></th></tr></thead>
+      <tbody>
+        <tr><td>What it is</td><td>A <strong>macro</strong> that runs once, when you type it</td><td>A plain setting</td></tr>
+        <tr><td>What it sets</td><td><strong>24576</strong>, unless the current root is already at 24576 or lower: then 4096 below it. Secondary sets <strong>28672</strong>.</td><td>Exactly what you typed</td></tr>
+        <tr><td>Saved in the config as</td><td>The resulting <code>priority</code> line, not "root primary"</td><td>The same line</td></tr>
+        <tr><td>If someone later sets a lower priority elsewhere</td><td>Doesn't react: the other switch takes over</td><td>Same</td></tr>
+      </tbody>
+    </table>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">D1 · what the macro actually saved</span></div>
+      <div class="terminal-body"><span class="prompt">D1#</span> <span class="cmd">show running-config | include spanning-tree</span>
+<span class="out">spanning-tree mode pvst</span>
+<span class="out">spanning-tree extend system-id</span>
+<span class="hl">spanning-tree vlan 10,30,99,900 priority 24576</span></div>
+    </div>
+    <p>Many engineers type the priority directly, because it says exactly what you'll get. Either way, the saved config is the same.</p>
   </section>
 
   <!-- ROOT DRILL -->
@@ -542,17 +393,9 @@
   <!-- FAILOVER -->
   <section id="failover">
     <div class="section-head">
-      <p class="kicker">Module 5.2 · Lab</p>
-      <h2>Watch a failover: cut S1's uplink</h2>
-      <p>Last session's single point of failure was S1's link to D1. Cut it, and watch the blocked port open.</p>
-    </div>
-    <p><strong>Set up first:</strong> on S2, have <code>show spanning-tree vlan 10</code> ready to repeat (press up-arrow). On PC-A, start <code>ping -t 192.168.10.1</code>, a ping that runs until you stop it with Ctrl+C. Its timeouts show the outage.</p>
-    <div class="terminal">
-      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">D1 · cut the link to S1</span></div>
-      <div class="terminal-body"><span class="prompt">D1#</span> <span class="cmd">configure terminal</span>
-<span class="prompt">D1(config)#</span> <span class="cmd">interface g1/0/1</span>
-<span class="prompt">D1(config-if)#</span> <span class="hl">shutdown</span>
-<span class="prompt">D1(config-if)#</span> <span class="cmd">end</span></div>
+      <p class="kicker">Module 5.2</p>
+      <h2>When a link fails</h2>
+      <p>STP's job isn't finished once the tree is built. When an active link fails, a blocked port has to take over, and 802.1D's timers decide how long that takes. Take HQ's tree and cut the S1–D1 link, which was Session 3's single point of failure.</p>
     </div>
     <h3 class="sub">What happens, in order (real 802.1D timing)</h3>
     <ol>
@@ -561,12 +404,13 @@
       <li><strong>After about 20 s,</strong> S2 makes F0/23 the designated port for that link, because S2 knows a better root (D1, through its own G0/1) than the one S1 is claiming. S2 starts passing D1's BPDUs to S1.</li>
       <li><strong>S1 learns that D1 is reachable through S2,</strong> makes F0/23 its root port (cost 19 + 4 = 23), and stops claiming to be root.</li>
       <li><strong>S2 F0/23 goes listening (15 s), then learning (15 s), then forwarding.</strong> That's the port that unblocks.</li>
-      <li><strong>Total: about 50 seconds</strong> with no path for S1's hosts. PC-A's ping shows it.</li>
+      <li><strong>Total: about 50 seconds</strong> with no path for S1's hosts.</li>
     </ol>
     <table class="spec">
       <thead><tr><th>Switch</th><th>Port</th><th>Role</th><th>State</th><th>Note</th></tr></thead>
       <tbody>
         <tr><td>D1</td><td>G1/0/1</td><td>—</td><td>down</td><td>Shut; it disappears from the STP output</td></tr>
+        <tr><td>S1</td><td>G0/1</td><td>—</td><td>down</td><td>Other end of the shut link; also gone from S1's output</td></tr>
         <tr><td>D1</td><td>G1/0/3</td><td>Designated</td><td>FWD</td><td>Still the root</td></tr>
         <tr><td>S2</td><td>G0/1</td><td>Root</td><td>FWD</td><td>Unchanged</td></tr>
         <tr><td>S2</td><td><strong>F0/23</strong></td><td><strong>Designated</strong></td><td><strong>FWD</strong></td><td><strong>Was Altn BLK.</strong> Now S1's way to the root.</td></tr>
@@ -574,18 +418,11 @@
       </tbody>
     </table>
     <ul class="obj-list">
-      <li><strong>D1's SVIs stay up.</strong> VLANs 10, 30 and 99 are still active on G1/0/3. Last session's single point of failure is fixed.</li>
-      <li><strong>PC-A reaches its gateway again, through S2,</strong> and no host setting changed.</li>
-      <li>Packet Tracer may run faster than the real timers, and may skip straight to listening. Watch S2 F0/23 go <code>BLK</code> → <code>LSN</code> → <code>LRN</code> → <code>FWD</code>, its role go from <code>Altn</code> to <code>Desg</code>, and its link light go from amber to green.</li>
+      <li><strong>D1's SVIs stay up.</strong> VLANs 10, 30 and 99 are still active on G1/0/3. Session 3's single point of failure is fixed.</li>
+      <li><strong>PC-A reaches its gateway again, through S2,</strong> and no host setting changes.</li>
     </ul>
-    <div class="terminal">
-      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">D1 · put it back</span></div>
-      <div class="terminal-body"><span class="prompt">D1#</span> <span class="cmd">configure terminal</span>
-<span class="prompt">D1(config)#</span> <span class="cmd">interface g1/0/1</span>
-<span class="prompt">D1(config-if)#</span> <span class="hl">no shutdown</span>
-<span class="prompt">D1(config-if)#</span> <span class="cmd">end</span></div>
-    </div>
-    <p>S1 hears D1 directly again, so G0/1 becomes its root port straight away, and S2 F0/23 goes back to blocking at once. But S1 G0/1 is a newly up port, so it has to go through listening and learning first. <strong>Fixing the cable causes a second outage of about 30 seconds.</strong> Remember that for Session 5.</p>
+    <h3 class="sub">And when the link comes back</h3>
+    <p>S1 hears D1 directly again, so G0/1 becomes its root port straight away, and S2 F0/23 goes back to blocking at once. But S1 G0/1 is a newly up port, so it has to go through listening and learning first. <strong>Fixing the cable causes a second outage of about 30 seconds.</strong> Slow recovery in both directions is the main reason Session 5 moves HQ to Rapid PVST+.</p>
   </section>
 
   <!-- VARIANTS -->
@@ -632,7 +469,7 @@
     <div class="section-head">
       <p class="kicker">Module 5.3</p>
       <h2>PortFast and BPDU guard</h2>
-      <p>Know them today; you'll apply them across the network in Session 9, with the rest of switch security. <strong>Don't configure them in today's file.</strong></p>
+      <p>Know them today; you'll apply them across the network in Session 9, with the rest of switch security. They aren't part of today's lab.</p>
     </div>
     <ul class="obj-list">
       <li><strong>PortFast:</strong> a host port skips listening and learning and forwards <strong>the moment the link comes up</strong>. Without it, a PC that boots waits 30 seconds before its port forwards, which can be long enough for its DHCP client to give up. <strong>Host ports only:</strong> on a link to another switch it can open a loop.</li>
@@ -690,6 +527,101 @@
     </div>
   </section>
 
+  <!-- LAB -->
+  <section id="lab">
+    <div class="section-head">
+      <p class="kicker">Lab · Packet Tracer</p>
+      <h2>Lab: close the triangle</h2>
+      <p>Everything above is how STP works. This is where you see it happen. Build a loop, find out what STP decided on its own, and break a link to watch it recover. Today's starting file already has the new cable from S2 G0/1 to D1 G1/0/3, with both ends parked (VLAN 999, shut).</p>
+    </div>
+    <h3 class="sub">Task 1 · Make the new link a trunk</h3>
+    <p>Configure <strong>both</strong> ends completely while they're still shut, and only then <code>no shutdown</code>. If one end comes up as a trunk while the other is still an access port in VLAN 999, the native VLANs don't match, and you get mismatch messages and a blocked port. The settings match the other two trunks: the same native VLAN, the same allowed list, and <code>nonegotiate</code> on both static ends.</p>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S2 · G0/1 becomes a trunk to D1</span></div>
+      <div class="terminal-body"><span class="prompt">S2#</span> <span class="cmd">configure terminal</span>
+<span class="prompt">S2(config)#</span> <span class="cmd">interface g0/1</span>
+<span class="prompt">S2(config-if)#</span> <span class="cmd">description Trunk to D1 G1/0/3</span>
+<span class="prompt">S2(config-if)#</span> <span class="hl">switchport mode trunk</span>
+<span class="prompt">S2(config-if)#</span> <span class="cmd">switchport trunk native vlan 900</span>
+<span class="prompt">S2(config-if)#</span> <span class="cmd">switchport trunk allowed vlan 10,30,99,900</span>
+<span class="prompt">S2(config-if)#</span> <span class="cmd">switchport nonegotiate</span>
+<span class="comment">!</span>
+<span class="comment">! Tidy-up, as in Session 3: the parking VLAN line does nothing on a trunk.</span>
+<span class="prompt">S2(config-if)#</span> <span class="cmd">no switchport access vlan</span>
+<span class="prompt">S2(config-if)#</span> <span class="hl">no shutdown</span>
+<span class="prompt">S2(config-if)#</span> <span class="cmd">end</span>
+<span class="prompt">S2#</span> <span class="cmd">copy running-config startup-config</span></div>
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">D1 · G1/0/3 becomes a trunk to S2</span></div>
+      <div class="terminal-body"><span class="prompt">D1#</span> <span class="cmd">configure terminal</span>
+<span class="prompt">D1(config)#</span> <span class="cmd">interface g1/0/3</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">description Trunk to S2 G0/1</span>
+<span class="comment">!</span>
+<span class="comment">! The PT 3650 wants the encapsulation set before trunk mode (Session 3).</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">switchport trunk encapsulation dot1q</span>
+<span class="prompt">D1(config-if)#</span> <span class="hl">switchport mode trunk</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">switchport trunk native vlan 900</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">switchport trunk allowed vlan 10,30,99,900</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">switchport nonegotiate</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">no switchport access vlan</span>
+<span class="prompt">D1(config-if)#</span> <span class="hl">no shutdown</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">end</span>
+<span class="prompt">D1#</span> <span class="cmd">copy running-config startup-config</span></div>
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S2 · quick check</span></div>
+      <div class="terminal-body"><span class="prompt">S2#</span> <span class="cmd">show interfaces trunk</span>
+<span class="out">Port        Mode             Encapsulation  Status        Native vlan</span>
+<span class="hl">Fa0/23      on               802.1q         trunking      900</span>
+<span class="hl">Gig0/1      on               802.1q         trunking      900</span>
+<span class="out">...</span></div>
+    </div>
+    <p>The new ports go through listening (15 s) and learning (15 s) before they forward, and closing the loop sends one port on the old F0/23 link to blocking. Give it about 30 seconds. There's a loop now, and nothing melted: STP was already running.</p>
+    <h3 class="sub">Task 2 · Find the root STP chose on its own</h3>
+    <p>Nobody has set a priority yet, so the lowest MAC address won. Run <code>show spanning-tree vlan 10</code> on all three switches and fill in the table. There must be exactly one <code>BLK</code> port, and it can't be on the root. Then use <a href="#election">the election steps</a> to explain why that port lost. Everyone opens the same starting file, so the whole class should get the same answer.</p>
+    <table class="spec">
+      <thead><tr><th>Switch</th><th>Root?</th><th>Root path cost</th><th>Root port</th><th>Every trunk port: role / state</th></tr></thead>
+      <tbody>
+        <tr><td>D1</td><td></td><td></td><td></td><td>G1/0/1: · G1/0/3:</td></tr>
+        <tr><td>S1</td><td></td><td></td><td></td><td>F0/23: · G0/1:</td></tr>
+        <tr><td>S2</td><td></td><td></td><td></td><td>F0/23: · G0/1:</td></tr>
+      </tbody>
+    </table>
+    <p>If D1's Cost column shows <code>20000</code> instead of <code>4</code>, D1 is using long costs and the 2960s are using short ones, the mismatch <a href="#election">the election</a> warns about. Tell your instructor.</p>
+    <h3 class="sub">Task 3 · Watch a failover</h3>
+    <p>On PC-A, start <code>ping -t 192.168.10.1</code>, a ping that runs until you stop it with Ctrl+C. Its timeouts show the outage. Then cut the S1–D1 link from D1. Whichever switch won in Task 2, the blocked port is on the slow F0/23 link (two Gigabit hops always beat one Fast Ethernet hop), so this cut always forces a failover.</p>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">D1 · cut the link to S1</span></div>
+      <div class="terminal-body"><span class="prompt">D1#</span> <span class="cmd">configure terminal</span>
+<span class="prompt">D1(config)#</span> <span class="cmd">interface g1/0/1</span>
+<span class="prompt">D1(config-if)#</span> <span class="hl">shutdown</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">end</span></div>
+    </div>
+    <p>Repeat <code>show spanning-tree vlan 10</code> on the switch that had the blocked port (up-arrow repeats it). Watch it go <code>BLK</code> → <code>LSN</code> → <code>LRN</code> → <code>FWD</code>, and its link light go from amber to green. Packet Tracer may run the timers faster than real switches, and may skip a state. Then put the link back and count the second outage. The first outage may be about 30 seconds rather than the 50 in <a href="#failover">When a link fails</a>: the max-age wait only happens when the switch that lost its root port has no blocked port of its own to fall back on.</p>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">D1 · put it back</span></div>
+      <div class="terminal-body"><span class="prompt">D1#</span> <span class="cmd">configure terminal</span>
+<span class="prompt">D1(config)#</span> <span class="cmd">interface g1/0/1</span>
+<span class="prompt">D1(config-if)#</span> <span class="hl">no shutdown</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">end</span></div>
+    </div>
+    <h3 class="sub">Task 4 (optional) · Make D1 the root</h3>
+    <p>Enter the two commands from <a href="#root">Choosing the root bridge</a>, D1 primary and S1 secondary. Wait for the tree to settle, and check that your three switches match <a href="#election">The election on HQ</a>, with S2 F0/23 the one <code>BLK</code>. Session 5's starting file has this done already, so skipping it doesn't put you behind.</p>
+    <h3 class="sub">If the new trunk misbehaves</h3>
+    <ul class="obj-list">
+      <li><strong>Native VLAN mismatch:</strong> D1 G1/0/3's native VLAN left at 1 gives CDP <code>NATIVE_VLAN_MISMATCH</code> messages on both ends, and <code>show interfaces trunk</code> shows different native VLANs. Fix: <code>switchport trunk native vlan 900</code> on the end that's wrong.</li>
+      <li><strong>One end never became a trunk:</strong> on D1, <code>switchport mode trunk</code> is rejected if the encapsulation line was skipped. <code>show interfaces trunk</code> on D1 has no Gi1/0/3. Fix: <code>switchport trunk encapsulation dot1q</code> first, then trunk mode.</li>
+      <li><strong>Forgot <code>no shutdown</code>:</strong> a shut port doesn't appear in the STP output at all. Fix: <code>no shutdown</code> on both ends.</li>
+      <li><strong>A VLAN left off:</strong> allowed list typed as <code>10,99,900</code>. VLAN 30 still works, through S1, but has no backup path, and <code>show spanning-tree vlan 30</code> on the switch with the short list doesn't show the new trunk port (Gi1/0/3 on D1, Gi0/1 on S2). Fix: <code>switchport trunk allowed vlan add 30</code> on that end.</li>
+    </ul>
+    <div class="teach-note warn">
+      <span class="label">See it: the storm (instructor demo)</span>
+      Your instructor will show a real broadcast storm on the projector, from a throwaway copy of today's finished network, in Simulation mode. Spanning Tree is turned off for VLAN 10 on all three switches (<code>no spanning-tree vlan 10</code>), PC-A clears its ARP cache and pings PC-C, and the ARP broadcast is stepped through: out of S1 both ways, copies crossing at S2 and D1, copies coming back to S1, and an event list that never ends. In Packet Tracer, only VLAN 10 melts: PC-D in VLAN 30 can still reach its gateway, because PVST+ runs a separate tree for each VLAN, and only one was turned off. On real switches, don't count on it: VLAN 10's storm fills the shared trunks and D1's CPU (its Vlan10 SVI receives every broadcast), so the other VLANs suffer too.
+    </div>
+    <p><strong>Don't try this in your own file.</strong> A storm can make Packet Tracer stop responding. If you ever find a <code>no spanning-tree vlan</code> line in a config, the fix is <code>spanning-tree vlan</code> with the same VLAN number (here, <code>spanning-tree vlan 10</code>) on every switch, then <code>clear mac address-table dynamic</code>.</p>
+  </section>
+
   <!-- MISTAKES -->
   <section id="mistakes">
     <div class="section-head">
@@ -703,20 +635,13 @@
     <p><code>root primary</code> typed on S1 and <code>root secondary</code> on D1. <code>show spanning-tree vlan 10</code> on D1 has no <code>This bridge is the root</code>. Fix: swap them.</p>
     <h3 class="sub">3 · A priority that isn't a multiple of 4096</h3>
     <p><code>spanning-tree vlan 10 priority 25000</code> is rejected, and IOS lists the values it accepts. Use 24576, or another multiple of 4096.</p>
-    <h3 class="sub">4 · Native VLAN mismatch on the new trunk</h3>
-    <p>D1 G1/0/3's native VLAN left at 1: CDP <code>NATIVE_VLAN_MISMATCH</code> messages on both ends, and <code>show interfaces trunk</code> shows different native VLANs. Fix: <code>switchport trunk native vlan 900</code> on the end that's wrong.</p>
-    <h3 class="sub">5 · One end never became a trunk</h3>
-    <p>On D1, <code>switchport mode trunk</code> was rejected because the encapsulation line was skipped, and nobody noticed. <code>show interfaces trunk</code> on D1: Gi1/0/3 is missing. Fix: <code>switchport trunk encapsulation dot1q</code> first, then trunk mode.</p>
-    <h3 class="sub">6 · Forgot <code>no shutdown</code></h3>
-    <p>Both new ports were parked and shut. A shut port doesn't appear in the STP output at all. Fix: <code>no shutdown</code> on both ends.</p>
-    <h3 class="sub">7 · A VLAN left off the new trunk</h3>
-    <p>Allowed list typed as <code>10,99,900</code>. VLAN 30 still works, through S1, but it has no backup path, and <code>show spanning-tree vlan 30</code> on D1 has no Gi1/0/3. Fix: <code>switchport trunk allowed vlan add 30</code>.</p>
-    <h3 class="sub">8 · Checking too soon</h3>
+    <h3 class="sub">4 · Checking too soon</h3>
     <p>Ports show <code>LSN</code> or <code>LRN</code>, and pings fail. That's not a fault: wait 30 to 50 seconds after any change.</p>
-    <h3 class="sub">9 · Reading the wrong block</h3>
-    <p>"S1's priority is 24586": that's the Root ID block, which is D1's. S1's own priority is in the Bridge ID block. And the Cost <em>column</em> is each port's cost, not the path cost.</p>
-    <h3 class="sub">10 · Using your own port ID to break a tie</h3>
+    <h3 class="sub">5 · Reading the wrong block</h3>
+    <p>"S2's priority is 24586": that's the Root ID block, which is D1's. S2's own priority is in the Bridge ID block. And the Cost <em>column</em> is each port's cost, not the path cost.</p>
+    <h3 class="sub">6 · Using the receiving switch's port ID to break a tie</h3>
     <p>When two links to the same switch tie, it's the <strong>sender's</strong> port ID that decides, not the receiving switch's.</p>
+    <p>Trunk mistakes from the lab are in <a href="#lab">If the new trunk misbehaves</a>.</p>
   </section>
 
   <!-- WHAT WORKS NOW -->
@@ -724,7 +649,7 @@
     <div class="section-head">
       <p class="kicker">End of session</p>
       <h2>What works now, and what doesn't</h2>
-      <p>No Layer 3 changes today: everything that worked at the end of Session 3 still works. What's new is what happens when something breaks.</p>
+      <p>No Layer 3 changes today: everything that worked at the end of Session 3 still works. What's new is what happens when something breaks. The rows assume HQ's designed tree, which Session 5's starting file has.</p>
     </div>
     <table class="spec">
       <thead><tr><th>Test</th><th>Result</th><th>Why</th></tr></thead>
@@ -780,7 +705,7 @@
       <li>The four election steps, and the tie-breakers in order: root path cost, sender bridge ID, sender port ID</li>
       <li>The port costs for Fast Ethernet (19) and Gigabit (4), and how to add up a root path cost</li>
       <li>Read <code>show spanning-tree</code>: the Root ID and Bridge ID blocks, the Role and Sts columns, and the Cost line vs the Cost column</li>
-      <li><code>root primary</code> and <code>root secondary</code>, what they set, and why they don't defend the root later</li>
+      <li>Why the default root is luck, and how a lower priority picks it instead. Beyond Module 5: what <code>root primary</code> and <code>root secondary</code> set</li>
       <li>The five 802.1D port states, the three timers, and why convergence takes 30 or 50 seconds</li>
       <li>The six STP versions, and which one is the default on our switches</li>
       <li>What PortFast and BPDU guard do, and where they must never go. Practice with the <a href="#rootdrill">Election drill</a>.</li>
