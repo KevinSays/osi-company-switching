@@ -139,6 +139,40 @@
       <h2>Router-on-a-stick</h2>
       <p>One physical router interface, one cable, one <strong>trunk</strong>. The router splits its interface into <strong>subinterfaces</strong>, one per VLAN. Each subinterface is told which VLAN tag it answers to with <code>encapsulation dot1Q</code>, and each one gets the gateway address for that VLAN. Frames come up the trunk tagged, the router routes them, and sends them back down the same cable with the new VLAN's tag.</p>
     </div>
+    <figure class="diagram">
+      <svg viewBox="0 0 360 312" style="max-width:440px" role="img" aria-label="Router-on-a-stick on HQ: a packet from PC-A in VLAN 10 goes up S1's trunk to R1 tagged 10, R1 routes it from subinterface .10 to .30, and it comes back down the same cable tagged 30, across to S2 and PC-D.">
+        <defs><marker id="stkRed" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#A23A2E"/></marker></defs>
+        <g font-family="IBM Plex Mono" font-size="12" fill="currentColor">
+          <rect x="40" y="6" width="240" height="76" fill="none" stroke="currentColor" stroke-width="1.5"/>
+          <text x="160" y="24" text-anchor="middle" font-weight="600">R1 · G0/0/1</text>
+          <text x="60" y="44" font-size="11" fill="#A23A2E" font-weight="600">.10  192.168.10.1</text>
+          <text x="60" y="59" font-size="11" fill="#A23A2E" font-weight="600">.30  192.168.30.1</text>
+          <text x="60" y="74" font-size="11">.99  192.168.99.1</text>
+          <text x="268" y="52" text-anchor="end" font-size="10" fill="#A23A2E">routes</text>
+          <text x="268" y="65" text-anchor="end" font-size="10" fill="#A23A2E">.10 → .30</text>
+          <line x1="150" y1="150" x2="150" y2="84" stroke="#A23A2E" stroke-width="2" marker-end="url(#stkRed)"/>
+          <line x1="170" y1="82" x2="170" y2="148" stroke="#A23A2E" stroke-width="2" marker-end="url(#stkRed)"/>
+          <text x="142" y="114" text-anchor="end" font-size="11" fill="#A23A2E" font-weight="600">tag 10</text>
+          <text x="178" y="114" font-size="11" fill="#A23A2E" font-weight="600">tag 30</text>
+          <text x="178" y="129" font-size="10" opacity=".8">one trunk cable</text>
+          <rect x="110" y="150" width="100" height="34" fill="#3F6B4A" fill-opacity=".14" stroke="#3F6B4A" stroke-width="1.5"/><text x="160" y="172" text-anchor="middle" font-weight="600" fill="#3F6B4A">S1</text>
+          <rect x="250" y="150" width="100" height="34" fill="#3F6B4A" fill-opacity=".14" stroke="#3F6B4A" stroke-width="1.5"/><text x="300" y="172" text-anchor="middle" font-weight="600" fill="#3F6B4A">S2</text>
+          <line x1="210" y1="167" x2="250" y2="167" stroke="#3F6B4A" stroke-width="4"/>
+          <text x="230" y="159" text-anchor="middle" font-size="10">F0/23</text>
+          <line x1="160" y1="184" x2="160" y2="220" stroke="currentColor" stroke-width="1.5"/>
+          <line x1="300" y1="184" x2="300" y2="220" stroke="currentColor" stroke-width="1.5"/>
+          <text x="166" y="206" font-size="10">F0/1</text><text x="306" y="206" font-size="10">F0/11</text>
+          <rect x="110" y="220" width="100" height="34" fill="none" stroke="currentColor" stroke-width="1.5"/><text x="160" y="242" text-anchor="middle" font-weight="600">PC-A · V10</text>
+          <rect x="250" y="220" width="100" height="34" fill="none" stroke="currentColor" stroke-width="1.5"/><text x="300" y="242" text-anchor="middle" font-weight="600">PC-D · V30</text>
+          <path d="M215,178 L245,178" stroke="#A23A2E" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#stkRed)"/>
+          <path d="M148,216 L148,188" stroke="#A23A2E" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#stkRed)"/>
+          <path d="M290,188 L290,216" stroke="#A23A2E" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#stkRed)"/>
+          <text x="180" y="290" text-anchor="middle" font-size="10">Up the trunk tagged 10, back down the same</text>
+          <text x="180" y="304" text-anchor="middle" font-size="10">cable tagged 30: every inter-VLAN packet crosses it twice.</text>
+        </g>
+      </svg>
+      <figcaption>Figure 1. Router-on-a-stick on HQ. PC-A (VLAN 10) to PC-D (VLAN 30). Each subinterface is a gateway; the tag decides which one a frame reaches.</figcaption>
+    </figure>
     <h3 class="sub">The router side: one subinterface per VLAN</h3>
     <p>R1's physical port, G0/0/1, has no address of its own. Each subinterface gets its VLAN with <code>encapsulation dot1Q</code>, then that VLAN's gateway address. The native VLAN's subinterface, <code>.900</code>, gets the <code>native</code> keyword and no address, because nothing on VLAN 900 needs a gateway.</p>
     <div class="terminal">
@@ -363,6 +397,45 @@
         <tr><td>Speed</td><td>Limited by one link</td><td>Switch hardware speed</td></tr>
       </tbody>
     </table>
+    <figure class="diagram">
+      <svg viewBox="0 0 360 352" style="max-width:440px" role="img" aria-label="Inter-VLAN routing on D1: PC-A's packet goes up S1's trunk to D1 tagged 10, D1 routes it inside the switch from Vlan10 to Vlan30, and sends it back down tagged 30 to S2 and PC-D. Only traffic leaving HQ uses the routed port from D1 G1/0/24 to R1.">
+        <defs><marker id="l3sRed" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#A23A2E"/></marker></defs>
+        <g font-family="IBM Plex Mono" font-size="12" fill="currentColor">
+          <rect x="120" y="6" width="120" height="30" fill="none" stroke="currentColor" stroke-width="1.5"/><text x="180" y="26" text-anchor="middle" font-weight="600">R1</text>
+          <line x1="180" y1="36" x2="180" y2="84" stroke="currentColor" stroke-width="1.5"/>
+          <text x="188" y="54" font-size="10">routed port, no tags</text>
+          <text x="188" y="68" font-size="10" opacity=".8">10.0.0.8/30 · G1/0/24</text>
+          <rect x="40" y="84" width="280" height="92" fill="#3F6B4A" fill-opacity=".14" stroke="#3F6B4A" stroke-width="1.5"/>
+          <text x="180" y="102" text-anchor="middle" font-weight="600" fill="#3F6B4A">D1 · ip routing</text>
+          <rect x="56" y="112" width="76" height="38" fill="#EDE8DD" stroke="#A23A2E" stroke-width="1.5"/>
+          <text x="94" y="128" text-anchor="middle" font-size="11" fill="#A23A2E" font-weight="600">Vlan10</text><text x="94" y="143" text-anchor="middle" font-size="10" fill="#A23A2E">.10.1</text>
+          <rect x="142" y="112" width="76" height="38" fill="#EDE8DD" stroke="#A23A2E" stroke-width="1.5"/>
+          <text x="180" y="128" text-anchor="middle" font-size="11" fill="#A23A2E" font-weight="600">Vlan30</text><text x="180" y="143" text-anchor="middle" font-size="10" fill="#A23A2E">.30.1</text>
+          <rect x="228" y="112" width="76" height="38" fill="#EDE8DD" stroke="currentColor" stroke-width="1.2"/>
+          <text x="266" y="128" text-anchor="middle" font-size="11">Vlan99</text><text x="266" y="143" text-anchor="middle" font-size="10">.99.1</text>
+          <path d="M104,150 Q137,170 170,152" fill="none" stroke="#A23A2E" stroke-width="1.5" marker-end="url(#l3sRed)"/>
+          <text x="218" y="168" font-size="10" fill="#A23A2E">routed inside D1</text>
+          <line x1="150" y1="240" x2="150" y2="178" stroke="#A23A2E" stroke-width="2" marker-end="url(#l3sRed)"/>
+          <line x1="170" y1="176" x2="170" y2="238" stroke="#A23A2E" stroke-width="2" marker-end="url(#l3sRed)"/>
+          <text x="142" y="206" text-anchor="end" font-size="11" fill="#A23A2E" font-weight="600">tag 10</text>
+          <text x="178" y="206" font-size="11" fill="#A23A2E" font-weight="600">tag 30</text>
+          <text x="178" y="221" font-size="10" opacity=".8">G1/0/1 trunk</text>
+          <rect x="110" y="240" width="100" height="34" fill="#3F6B4A" fill-opacity=".14" stroke="#3F6B4A" stroke-width="1.5"/><text x="160" y="262" text-anchor="middle" font-weight="600" fill="#3F6B4A">S1</text>
+          <rect x="250" y="240" width="100" height="34" fill="#3F6B4A" fill-opacity=".14" stroke="#3F6B4A" stroke-width="1.5"/><text x="300" y="262" text-anchor="middle" font-weight="600" fill="#3F6B4A">S2</text>
+          <line x1="210" y1="257" x2="250" y2="257" stroke="#3F6B4A" stroke-width="4"/>
+          <text x="230" y="249" text-anchor="middle" font-size="10">F0/23</text>
+          <line x1="160" y1="274" x2="160" y2="310" stroke="currentColor" stroke-width="1.5"/>
+          <line x1="300" y1="274" x2="300" y2="310" stroke="currentColor" stroke-width="1.5"/>
+          <text x="166" y="296" font-size="10">F0/1</text><text x="306" y="296" font-size="10">F0/11</text>
+          <rect x="110" y="310" width="100" height="34" fill="none" stroke="currentColor" stroke-width="1.5"/><text x="160" y="332" text-anchor="middle" font-weight="600">PC-A · V10</text>
+          <rect x="250" y="310" width="100" height="34" fill="none" stroke="currentColor" stroke-width="1.5"/><text x="300" y="332" text-anchor="middle" font-weight="600">PC-D · V30</text>
+          <path d="M215,268 L245,268" stroke="#A23A2E" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#l3sRed)"/>
+          <path d="M148,306 L148,278" stroke="#A23A2E" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#l3sRed)"/>
+          <path d="M290,278 L290,306" stroke="#A23A2E" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#l3sRed)"/>
+        </g>
+      </svg>
+      <figcaption>Figure 2. The same trip with D1 as the gateway. The addresses are the ones R1's subinterfaces had, but the routing now happens inside D1. Only traffic leaving HQ uses the routed port to R1.</figcaption>
+    </figure>
     <h3 class="sub">D1's configuration</h3>
     <p>D1 needs five things: routing turned on, its own copy of the VLANs, a routed port to R1, a trunk to S1, and one SVI per VLAN.</p>
     <div class="terminal">
