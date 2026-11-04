@@ -467,6 +467,10 @@
       <li><strong>D1 has no access ports in VLANs 10, 30 or 99.</strong> Each SVI stays up only because the G1/0/1 trunk carries its VLAN. If the trunk drops, or a VLAN leaves its allowed list, that SVI goes up/down.</li>
     </ul>
     <p><strong>D1 and R1 also need routes</strong> to each other's networks: R1 to the HQ subnets behind D1, and D1 to everything outside HQ. Those are static routes, which are Module 15. The lab provides them.</p>
+    <div class="teach-note preview">
+      <span class="label">Coming up in CCNA 3</span>
+      Here R1 and D1 learn each other's networks from typed-in static routes. Larger networks use a <strong>routing protocol</strong> such as OSPF instead, so routers and Layer 3 switches share their routes automatically. Session 11 introduces the idea; CCNA 3 configures OSPF.
+    </div>
   </section>
 
   <!-- VERIFY 3B -->
@@ -604,6 +608,18 @@
       <p class="kicker">The Wrong Door</p>
       <h2>Fault hunt</h2>
       <p>Each config below has one bug. Find it before you open the answer. Each one is a fault from the <a href="#troubleshoot">Troubleshoot</a> table.</p>
+    </div>
+    <div class="wanted">
+      <span class="threat">THREAT LEVEL: GATEWAY</span>
+      <p class="eyebrow">CASE FILE D-03</p>
+      <h3>The Wrong Door</h3>
+      <p class="mo">Never touches a cable. It points a host, or a switch, at the wrong gateway: another VLAN's address, an address outside the host's own subnet, or the right address on an SVI that's down. The host still reaches its neighbors, so everything looks fine until it tries to leave.</p>
+      <p class="tell"><strong>Tell:</strong> <code>ipconfig</code> shows a default gateway outside the host's own subnet, or <code>show ip interface brief</code> shows the gateway's SVI or subinterface as anything but <code>up up</code>. Pings inside the VLAN work, and anything routed fails.</p>
+      <p class="xref">See also: <a href="#doors">Why VLANs need a router</a> · <a href="#doorTool">Which door?</a></p>
+    </div>
+    <div class="teach-note">
+      <span class="label">Debrief</span>
+      PC-D, with gateway <code>192.168.10.1</code>, can still ping <code>192.168.30.1</code>. Why doesn't that prove its gateway works? <em>(<code>192.168.30.1</code> is in PC-D's own subnet, so that ping never uses the gateway. Only a ping to another subnet tests it)</em>
     </div>
     <div class="tool door-q">
       <p class="tool-title">Door 1</p>

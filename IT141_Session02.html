@@ -121,6 +121,18 @@
       <li><strong>R1's MAC doesn't show up on S2.</strong> R1's reply was a unicast to PC-A, and S1 already knew PC-A was on Fa0/1, so the reply never left S1.</li>
     </ul>
     <p>PC-D is in a different subnet (<code>192.168.30.0/26</code>), but it's in the same broadcast domain, so it still has to receive PC-A's broadcast and throw it away. Multiply that by every host and every broadcast: that's The Sprawl.</p>
+    <div class="wanted">
+      <span class="threat">BACK FROM CCNA 1</span>
+      <p class="eyebrow">CASE FILE D-01</p>
+      <h3>The Sprawl</h3>
+      <p class="mo">One broadcast domain that grows with every switch and every desk. Every ARP request reaches every host on the floor, whether it's for them or not. It breaks nothing on day one. It just makes the whole floor noisier, slower, and easier to snoop on.</p>
+      <p class="tell"><strong>Tell:</strong> a switch learns the MAC address of a host it never talks to (S2 learning PC-A on Fa0/23), and Simulation mode shows one ARP request reaching hosts in other subnets.</p>
+      <p class="xref">See also: <a href="#vlans">What a VLAN is</a> · <a href="#native">D-02, The Native</a></p>
+    </div>
+    <div class="teach-note">
+      <span class="label">Debrief</span>
+      CCNA 1's Zoning Office split The Sprawl with a router. Why is a VLAN the cheaper fix? <em>(a router needs a port, and a cable, for every broadcast domain. VLANs split one switch into many broadcast domains at no cost; a router is needed only for the traffic that has to cross between them)</em>
+    </div>
   </section>
 
   <!-- WHAT A VLAN IS -->
@@ -172,6 +184,34 @@
       <p>PC-A is in VLAN 10 on S1. PC-C is in VLAN 10 on S2. The frames between them cross one cable that also carries VLANs 30 and 99. How does S2 know which VLAN a frame belongs to?</p>
     </div>
     <p>The link between the switches is a <strong>trunk</strong>: a point-to-point link that carries more than one VLAN. On a trunk, the sending switch adds an <strong>IEEE 802.1Q tag</strong> to each frame that says which VLAN it belongs to. The receiving switch reads the tag and forwards the frame only to ports in that VLAN, removing the tag when the frame leaves an access port. Hosts never see tags; access ports send and receive ordinary, untagged frames.</p>
+    <figure class="diagram">
+      <svg viewBox="0 0 360 330" style="max-width:420px" role="img" aria-label="A frame from PC-A in VLAN 10 enters S1 untagged on an access port, crosses the S1 to S2 trunk with an 802.1Q tag carrying VLAN ID 10, and leaves S2 untagged to PC-C.">
+        <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="currentColor"/></marker></defs>
+        <g font-family="IBM Plex Mono" font-size="12" fill="currentColor">
+          <rect x="110" y="6" width="140" height="38" fill="none" stroke="currentColor" stroke-width="1.5"/>
+          <text x="180" y="30" text-anchor="middle" font-weight="600">PC-A · VLAN 10</text>
+          <line x1="180" y1="44" x2="180" y2="86" stroke="currentColor" stroke-width="1.5" marker-end="url(#arr)"/>
+          <text x="192" y="62" font-size="11">untagged frame</text>
+          <text x="192" y="77" font-size="10" opacity=".8">into F0/1, an access port</text>
+          <rect x="110" y="88" width="140" height="38" fill="#3F6B4A" fill-opacity=".14" stroke="#3F6B4A" stroke-width="1.5"/>
+          <text x="180" y="112" text-anchor="middle" font-weight="600" fill="#3F6B4A">S1</text>
+          <line x1="180" y1="126" x2="180" y2="204" stroke="#3F6B4A" stroke-width="4"/>
+          <rect x="192" y="146" width="160" height="40" fill="#A23A2E" fill-opacity=".10" stroke="#A23A2E" stroke-width="1.5"/>
+          <text x="272" y="163" text-anchor="middle" font-size="11" fill="#A23A2E" font-weight="600">tag added: VID 10</text>
+          <text x="272" y="178" text-anchor="middle" font-size="10" fill="#A23A2E">trunk F0/23 ↔ F0/23</text>
+          <text x="168" y="170" text-anchor="end" font-size="10" opacity=".8">carries 10, 30,</text>
+          <text x="168" y="184" text-anchor="end" font-size="10" opacity=".8">99 and 900</text>
+          <rect x="110" y="206" width="140" height="38" fill="#3F6B4A" fill-opacity=".14" stroke="#3F6B4A" stroke-width="1.5"/>
+          <text x="180" y="230" text-anchor="middle" font-weight="600" fill="#3F6B4A">S2</text>
+          <line x1="180" y1="244" x2="180" y2="284" stroke="currentColor" stroke-width="1.5" marker-end="url(#arr)"/>
+          <text x="192" y="261" font-size="11">tag removed</text>
+          <text x="192" y="276" font-size="10" opacity=".8">out F0/1, VLAN 10 only</text>
+          <rect x="110" y="286" width="140" height="38" fill="none" stroke="currentColor" stroke-width="1.5"/>
+          <text x="180" y="310" text-anchor="middle" font-weight="600">PC-C · VLAN 10</text>
+        </g>
+      </svg>
+      <figcaption>Figure 1. One VLAN 10 frame from PC-A to PC-C. Hosts never see a tag; only the trunk carries one. A frame in VLAN 900, the native VLAN, would cross the trunk untagged.</figcaption>
+    </figure>
     <table class="spec">
       <thead><tr><th>802.1Q tag field</th><th>Size</th><th>What it holds</th></tr></thead>
       <tbody>
@@ -182,6 +222,38 @@
       </tbody>
     </table>
     <p>The whole tag is <strong>4 bytes</strong>, inserted after the source MAC address. Because the frame changed, the switch recalculates the FCS.</p>
+    <figure class="diagram">
+      <svg viewBox="0 0 360 214" role="img" aria-label="An Ethernet frame with the 4-byte 802.1Q tag inserted after the source MAC address, and the tag's four fields: TPID 0x8100, priority, CFI, and the 12-bit VLAN ID.">
+        <g font-family="IBM Plex Mono" font-size="11" fill="currentColor" text-anchor="middle">
+          <text x="180" y="14" font-weight="600">Tagged Ethernet frame</text>
+          <rect x="2" y="24" width="58" height="40" fill="none" stroke="currentColor" stroke-width="1.5"/>
+          <text x="31" y="42">Dest</text><text x="31" y="56">MAC 6</text>
+          <rect x="60" y="24" width="58" height="40" fill="none" stroke="currentColor" stroke-width="1.5"/>
+          <text x="89" y="42">Source</text><text x="89" y="56">MAC 6</text>
+          <rect x="118" y="24" width="62" height="40" fill="#3F6B4A" fill-opacity=".16" stroke="#3F6B4A" stroke-width="2.5"/>
+          <text x="149" y="42" fill="#3F6B4A" font-weight="600">802.1Q</text><text x="149" y="56" fill="#3F6B4A" font-weight="600">tag 4</text>
+          <rect x="180" y="24" width="44" height="40" fill="none" stroke="currentColor" stroke-width="1.5"/>
+          <text x="202" y="42">Type</text><text x="202" y="56">2</text>
+          <rect x="224" y="24" width="84" height="40" fill="none" stroke="currentColor" stroke-width="1.5"/>
+          <text x="266" y="49">Data</text>
+          <rect x="308" y="24" width="50" height="40" fill="none" stroke="currentColor" stroke-width="1.5"/>
+          <text x="333" y="42">FCS</text><text x="333" y="56">4</text>
+          <line x1="118" y1="64" x2="2" y2="110" stroke="#3F6B4A" stroke-width="1.2" stroke-dasharray="4 3"/>
+          <line x1="180" y1="64" x2="358" y2="110" stroke="#3F6B4A" stroke-width="1.2" stroke-dasharray="4 3"/>
+          <rect x="2" y="110" width="150" height="46" fill="#3F6B4A" fill-opacity=".10" stroke="#3F6B4A" stroke-width="1.5"/>
+          <text x="77" y="129">TPID 0x8100</text><text x="77" y="145" font-size="10">16 bits: "this is tagged"</text>
+          <rect x="152" y="110" width="58" height="46" fill="#3F6B4A" fill-opacity=".10" stroke="#3F6B4A" stroke-width="1.5"/>
+          <text x="181" y="129">PRI</text><text x="181" y="145" font-size="10">3 bits</text>
+          <rect x="210" y="110" width="40" height="46" fill="#3F6B4A" fill-opacity=".10" stroke="#3F6B4A" stroke-width="1.5"/>
+          <text x="230" y="129">CFI</text><text x="230" y="145" font-size="10">1 bit</text>
+          <rect x="250" y="110" width="108" height="46" fill="#A23A2E" fill-opacity=".10" stroke="#A23A2E" stroke-width="2"/>
+          <text x="304" y="129" fill="#A23A2E" font-weight="600">VLAN ID</text><text x="304" y="145" font-size="10" fill="#A23A2E">12 bits: 1–4094</text>
+          <text x="180" y="182" font-size="10">Numbers in the frame are bytes. The tag goes in after the</text>
+          <text x="180" y="198" font-size="10">source MAC, and the switch recalculates the FCS.</text>
+        </g>
+      </svg>
+      <figcaption>Figure 2. The 802.1Q tag. A tagged frame is 4 bytes longer than the same frame untagged.</figcaption>
+    </figure>
     <div class="teach-note callback">
       <span class="label">CCNA 1 callback</span>
       The Ethernet II frame from <a href="https://kevinsays.github.io/131/">CCNA 1 Session 5</a>: preamble, destination MAC, source MAC, type, data, FCS. The 802.1Q tag slides in right after the source MAC, so a tagged frame is 4 bytes longer.
@@ -344,7 +416,7 @@
     <div class="section-head">
       <p class="kicker">Module 3.3</p>
       <h2>Verify VLANs</h2>
-      <p>Three commands answer almost every VLAN question.</p>
+      <p>Three commands answer almost every VLAN question, and two more fill in the details.</p>
     </div>
     <table class="spec">
       <thead><tr><th>Command</th><th>Answers</th></tr></thead>
@@ -352,6 +424,8 @@
         <tr><td class="mono">show vlan brief</td><td>Which VLANs exist, and which access ports are in each</td></tr>
         <tr><td class="mono">show vlan id <em>n</em> / show vlan name <em>name</em></td><td>Details of one VLAN</td></tr>
         <tr><td class="mono">show interfaces <em>id</em> switchport</td><td>Everything about one port: its mode, its access VLAN, its native VLAN, and whether it negotiates</td></tr>
+        <tr><td class="mono">show vlan summary</td><td>How many VLANs exist on the switch, normal and extended range</td></tr>
+        <tr><td class="mono">show interfaces vlan <em>n</em></td><td>One SVI: whether it's up, its address, and its counters</td></tr>
       </tbody>
     </table>
     <div class="terminal">
@@ -534,6 +608,18 @@
       <li>CDP repeats the warning about once a minute, on both switches.</li>
       <li><strong>Fix:</strong> put <code>switchport trunk native vlan 900</code> back on S2.</li>
     </ul>
+    <div class="wanted">
+      <span class="threat">THREAT LEVEL: TRUNK</span>
+      <p class="eyebrow">CASE FILE D-02</p>
+      <h3>The Native</h3>
+      <p class="mo">Rides the one VLAN on a trunk that crosses untagged. When the two ends disagree about which VLAN that is, The Native carries frames from one VLAN into another, and no tag looks wrong, because there is no tag. Its accomplice is DTP: a port left in a dynamic mode becomes a trunk for whoever asks.</p>
+      <p class="tell"><strong>Tell:</strong> <code>%CDP-4-NATIVE_VLAN_MISMATCH</code>, repeating on both switches, and different native VLANs at each end in <code>show interfaces trunk</code>. For DTP: a port nobody configured as a trunk shows <code>Operational Mode: trunk</code> in <code>show interfaces switchport</code>.</p>
+      <p class="xref">See also: <a href="#tagging">The native VLAN</a> · <a href="#dtp">DTP</a></p>
+    </div>
+    <div class="teach-note">
+      <span class="label">Debrief</span>
+      Why does HQ use an empty VLAN, 900, as its native VLAN, and not VLAN 1 or a user VLAN? <em>(untagged frames land in the native VLAN. If no host is assigned to it, no attacker can sit in it to start a double-tagging attack, and a mismatch has no user traffic to leak. Session 8 shows the attack)</em>
+    </div>
     <div class="teach-note preview">
       <span class="label">Coming up in Session 4</span>
       On real switches, Spanning Tree also notices the mismatch and blocks the affected VLANs on that port. Packet Tracer may only show the CDP message.
@@ -914,6 +1000,7 @@
     {t:"802.1Q", d:"The IEEE standard for VLAN tagging on trunks. Adds a 4-byte tag after the source MAC address."},
     {t:"Access port", d:"A switch port that belongs to one data VLAN (plus, optionally, a voice VLAN) and sends and receives untagged frames."},
     {t:"Allowed VLAN list", d:"The VLANs permitted to cross a trunk. Set with switchport trunk allowed vlan; use add or remove to change it without replacing it."},
+    {t:"CFI", d:"Canonical format identifier: a 1-bit field in the 802.1Q tag, kept for compatibility with old Token Ring networks."},
     {t:"Data VLAN", d:"A VLAN that carries user traffic."},
     {t:"Default VLAN", d:"VLAN 1. Every port starts there. It can't be deleted or renamed."},
     {t:"DTP", d:"Dynamic Trunking Protocol. Cisco's protocol for negotiating whether a link becomes a trunk. On by default; turn it off with switchport nonegotiate."},
@@ -925,10 +1012,17 @@
     {t:"Native VLAN mismatch", d:"The two ends of a trunk use different native VLANs. CDP logs a warning, and untagged traffic leaks between the two VLANs."},
     {t:"Normal range", d:"VLANs 1–1005. Stored in vlan.dat in flash. 1002–1005 are reserved and can't be deleted."},
     {t:"Parking VLAN", d:"An unused VLAN (ours is 999) that holds unused, shut-down ports, so anything plugged in lands somewhere harmless."},
+    {t:"show interfaces switchport", d:"Everything about one port's Layer 2 setup: administrative and operational mode, access VLAN, native VLAN, and whether DTP negotiates."},
+    {t:"show interfaces trunk", d:"Every trunk on the switch: mode, encapsulation, native VLAN, and the VLANs allowed, active, and forwarding on each."},
+    {t:"show vlan brief", d:"One line per VLAN: number, name, status, and its access ports. Trunk ports aren't listed."},
+    {t:"show vlan summary", d:"Counts the VLANs on the switch, normal and extended range."},
     {t:"switchport nonegotiate", d:"Stops a port from sending DTP frames. Needs switchport mode access or trunk on the same port."},
     {t:"Tag", d:"The 4-byte 802.1Q field a switch adds to a frame on a trunk to say which VLAN it belongs to: type, priority, CFI, and the 12-bit VLAN ID."},
+    {t:"TPID", d:"Tag protocol identifier: the first 2 bytes of an 802.1Q tag, always 0x8100. It tells the receiving switch the frame is tagged."},
     {t:"Trunk", d:"A point-to-point link that carries more than one VLAN, using 802.1Q tags."},
+    {t:"User priority (CoS)", d:"The 3-bit priority field in an 802.1Q tag, values 0 to 7. IP phones use it to mark voice traffic as urgent."},
     {t:"VLAN", d:"Virtual LAN: a group of switch ports that acts as a separate LAN and broadcast domain, usually with its own subnet."},
+    {t:"VLAN ID (VID)", d:"The 12-bit field in an 802.1Q tag that holds the VLAN number. 12 bits give 4,096 values; 0 and 4095 are reserved, so 1 to 4094 are usable."},
     {t:"vlan.dat", d:"The file in flash that stores normal-range VLANs. Erasing the startup configuration doesn't delete it."},
     {t:"Voice VLAN", d:"A VLAN for IP phone traffic, which needs priority and low delay. Set on an access port with switchport voice vlan."},
   ];

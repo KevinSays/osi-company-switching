@@ -118,7 +118,20 @@
         <tr><td><strong>Multicast too</strong></td><td>Multicast is flooded like a broadcast. IPv6 neighbor discovery uses multicast, so IPv6 melts as well.</td></tr>
       </tbody>
     </table>
+    <div class="wanted">
+      <span class="threat">THREAT LEVEL: STORM</span>
+      <p class="eyebrow">CASE FILE D-04</p>
+      <h3>The Loop</h3>
+      <p class="mo">Lives in every redundant cable. Give it two paths between the same switches and no Spanning Tree, and one broadcast becomes thousands. Frames circle forever because Ethernet has no TTL, MAC tables flip between ports, and hosts get the same frame twice.</p>
+      <p class="tell"><strong>Tell:</strong> in Simulation mode, an event list that never ends, with copies of the same ARP request crossing in both directions. In a config, a <code>no spanning-tree vlan</code> line. On real switches, MAC-flap log messages and link LEDs that never stop blinking.</p>
+      <p class="xref">See also: <a href="#election">How STP decides</a> · <a href="#portfast">BPDU guard</a></p>
+    </div>
+    <div class="teach-note">
+      <span class="label">Debrief</span>
+      STP is on by default. So how does The Loop ever get in? <em>(someone turns STP off for a VLAN, or someone cables a loop through desk ports: a patch cable from one wall jack to another, or a small unmanaged switch plugged into two desk ports. That's why BPDU guard, Session 9, shuts a PortFast port the moment any BPDU arrives on it, even the switch's own BPDU coming back around the loop)</em>
+    </div>
     <p><strong>Spanning Tree Protocol</strong> fixes all four the same way. It <strong>logically blocks</strong> just enough ports that there's exactly one active path between any two switches, so the cabling is a loop but the forwarding is a tree. If an active link fails, STP <strong>unblocks</strong> a port to restore a path. Two hallways are safer than one, as long as nobody walks in circles.</p>
+    <p>STP runs the <strong>Spanning Tree Algorithm (STA)</strong>, which Radia Perlman invented at Digital Equipment Corporation and published in 1985: pick one switch as the reference point, find every other switch's best path to it, and block the rest.</p>
     <p>PVST+, the version on our switches, runs a separate tree for every VLAN, so a loop left open in one VLAN (for example, with STP turned off there) doesn't automatically melt the others. On real switches the storm still fills the trunks and the CPUs they share, so the other VLANs suffer too.</p>
   </section>
 
@@ -903,26 +916,35 @@
 
   const TERMS = [
     {t:"Alternate port", d:"A port that isn't a root port or a designated port. It blocks, but keeps listening to BPDUs so it can take over if the active path fails."},
+    {t:"Blocking", d:"802.1D port state: receives BPDUs only. No MAC learning, no data. Alternate ports sit here."},
     {t:"BPDU", d:"Bridge protocol data unit: the frame STP switches exchange to elect the root and work out port roles. The root sends one every 2 seconds (hello time)."},
     {t:"BPDU guard", d:"Shuts down (err-disables) a PortFast port if it receives a BPDU, which means a switch was plugged in where a host should be."},
     {t:"Bridge ID (BID)", d:"A switch's STP identity: priority (plus the VLAN number) followed by its MAC address. The lowest BID becomes the root bridge."},
     {t:"Broadcast storm", d:"Broadcasts circling a Layer 2 loop and multiplying until links and switches are overwhelmed. Ethernet frames have no TTL, so they never expire."},
     {t:"Designated port", d:"The one port on each link that sends BPDUs and forwards frames onto that link, chosen as the end closest to the root. Every port on the root bridge is designated."},
+    {t:"Discarding", d:"RSTP's single state for a port that forwards no data. It replaces 802.1D's disabled, blocking, and listening."},
     {t:"Extended system ID", d:"The VLAN number, added to a switch's priority in its bridge ID. That's why the default priority shows as 32778 in VLAN 10."},
     {t:"Forward delay", d:"The STP timer for time spent in listening, and again in learning. Default 15 seconds."},
+    {t:"Forwarding", d:"802.1D and RSTP port state: sends and receives data and BPDUs, and learns MAC addresses."},
     {t:"Hello time", d:"How often the root bridge sends BPDUs. Default 2 seconds."},
+    {t:"Learning", d:"802.1D port state: learns MAC addresses from incoming frames but forwards no data yet. Lasts one forward delay, 15 seconds."},
+    {t:"Listening", d:"802.1D port state: sends and receives BPDUs, but learns no MACs and forwards no data. Lasts one forward delay, 15 seconds."},
     {t:"Max age", d:"How long a switch keeps a port's last BPDU without a fresh one before deciding that path is gone. Default 20 seconds."},
     {t:"MSTP / MST", d:"Multiple Spanning Tree: groups many VLANs into a few STP instances, so there are fewer trees to run. MSTP is the IEEE standard (802.1s); MST is Cisco's implementation."},
+    {t:"Path cost (short / long)", d:"The cost STP gives a port from its speed. Short values, the 2960 default: 4 for 1 Gb/s, 19 for 100 Mb/s. Long values: 20,000 and 200,000."},
     {t:"Port ID", d:"Port priority (default 128) followed by port number. The last tie-breaker in STP, and it's the sender's port ID that counts."},
+    {t:"Port priority", d:"The first part of a port ID: default 128, set in steps of 16. Lower wins when two ports lead to the same switch."},
     {t:"PortFast", d:"Makes a host port skip listening and learning and forward as soon as the link comes up. Host ports only."},
     {t:"Priority", d:"The part of the bridge ID you configure. Default 32768; set in multiples of 4096. Lower is better."},
     {t:"PVST+", d:"Cisco's Per-VLAN Spanning Tree Plus: a separate 802.1D tree for each VLAN. The default on our switches."},
     {t:"Rapid PVST+", d:"Cisco's per-VLAN version of RSTP. Converges in about a second. Session 5."},
     {t:"Root bridge", d:"The switch every STP decision is measured from. The lowest bridge ID wins the election."},
+    {t:"Root ID", d:"The bridge ID of the switch a switch believes is the root, as carried in BPDUs. It's the Root ID block of show spanning-tree."},
     {t:"Root path cost", d:"The total cost from a switch to the root bridge, adding the cost of each port that receives the root's BPDUs. Fast Ethernet = 19, Gigabit = 4."},
     {t:"Root port", d:"The one port on each non-root switch with the lowest root path cost to the root bridge."},
     {t:"root primary / root secondary", d:"Macros that set a switch's priority so it becomes root (24576, or lower if needed) or the backup root (28672). They run once and don't defend the root later."},
     {t:"RSTP", d:"Rapid Spanning Tree Protocol, IEEE 802.1w: STP's fast-converging successor. Same election; new port states (discarding, learning, forwarding) and roles."},
+    {t:"Spanning Tree Algorithm (STA)", d:"The algorithm STP runs, invented by Radia Perlman and published in 1985: elect a root bridge, find each switch's best path to it, and block the redundant ports."},
     {t:"STP", d:"Spanning Tree Protocol, IEEE 802.1D: blocks redundant Layer 2 ports so the active topology is loop-free, and unblocks them if a link fails."},
   ];
 

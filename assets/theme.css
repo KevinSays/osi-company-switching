@@ -192,6 +192,23 @@
   ol.steps{ counter-reset:step; list-style:none; margin:0; padding:0; display:grid; gap:10px; }
   ol.steps li{ counter-increment:step; background:var(--paper); border:1.5px solid var(--ink); box-shadow:var(--shadow); padding:12px 14px 12px 3.2em; position:relative; font-size:.92rem; }
   ol.steps li::before{ content:counter(step); position:absolute; left:12px; top:10px; font-family:var(--display); font-size:1.3rem; color:var(--red); }
+  /* WANTED POSTER: villain Case File cards (from 131 Session 3) */
+  .wanted{ background:var(--paper); border:2px solid var(--ink); box-shadow:var(--shadow); padding:24px 24px 20px; margin:22px 0; position:relative; }
+  .wanted .eyebrow{ margin-bottom:14px; }
+  .wanted h3{ font-family:var(--display); font-weight:400; font-size:1.5rem; margin:0 0 6px; }
+  .wanted .mo{ font-size:.95rem; line-height:1.6; margin:0 0 14px; }
+  .wanted .threat{ position:absolute; top:20px; right:24px; border:2px solid var(--red); color:var(--red); font-family:var(--display);
+    font-size:.84rem; letter-spacing:.07em; padding:5px 8px; transform:rotate(5deg); background:var(--paper); }
+  .wanted .tell{ font-family:var(--mono); font-size:.8rem; border-top:2px dashed var(--ink); padding-top:12px; margin-top:12px; }
+  .wanted .xref{ font-family:var(--mono); font-size:.88rem; opacity:.75; margin:10px 0 0; }
+  @media (max-width:640px){ .wanted{ padding:18px 16px 16px; } .wanted .threat{ position:static; display:inline-block; margin:0 0 12px; transform:rotate(-2deg); } }
+
+  /* DIAGRAMS: inline SVG drawn with the theme's tokens */
+  figure.diagram{ margin:22px 0; background:var(--paper); border:2px solid var(--ink); box-shadow:var(--shadow); padding:16px 14px 12px; }
+  figure.diagram svg{ display:block; width:100%; height:auto; max-width:560px; margin:0 auto; color:var(--ink); }
+  figure.diagram figcaption{ font-family:var(--mono); font-size:.76rem; line-height:1.5; margin-top:10px; opacity:.85; }
+  @media print{ .wanted, figure.diagram{ box-shadow:none; } }
+
   /* Top bar: Contents + two pinned links + a Sections menu (the script below builds the menu;
      without JavaScript the links simply wrap onto extra rows) */
   nav.index .wrap{ flex-wrap:wrap; overflow-x:visible; row-gap:2px; padding-top:6px; padding-bottom:6px; position:relative; }

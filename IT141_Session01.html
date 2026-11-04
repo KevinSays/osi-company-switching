@@ -269,7 +269,7 @@
     </div>
     <div class="teach-note">
       <span class="label">Auto-MDIX needs auto on both settings</span>
-      Auto-MDIX is on by default on a 2960, and it works only when speed and duplex are both <code>auto</code>. Packet Tracer doesn't really model cable tolerance, so in Packet Tracer, still pick the right cable.
+      Auto-MDIX is on by default on a 2960, and it works only when speed and duplex are both <code>auto</code>. On a real switch, <code>show controllers ethernet-controller fa0/1 phy | include MDIX</code> shows whether it's on (Packet Tracer may not accept it). Packet Tracer doesn't really model cable tolerance either, so in Packet Tracer, still pick the right cable.
     </div>
     <div class="terminal">
       <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · show interfaces f0/1 (trimmed)</span></div>
@@ -700,7 +700,7 @@
       <tbody>
         <tr><td>When it forwards</td><td>After receiving the <strong>whole</strong> frame</td><td>As soon as it has read the <strong>destination MAC</strong></td></tr>
         <tr><td>Error checking</td><td>Checks the FCS (CRC) and drops bad frames</td><td>No FCS check, so it can pass damaged frames along</td></tr>
-        <tr><td>Different port speeds</td><td>Yes: it buffers the frame, so a 1 Gb/s port can feed a 100 Mb/s port</td><td>No</td></tr>
+        <tr><td>Different port speeds</td><td>Yes: it buffers the frame (<strong>automatic buffering</strong>), so a 1 Gb/s port can feed a 100 Mb/s port</td><td>No</td></tr>
         <tr><td>Latency</td><td>Higher</td><td>Very low. Used where latency must stay under about 10 microseconds.</td></tr>
         <tr><td>Notes</td><td><strong>Cisco's preferred method</strong></td><td><strong>Fragment-free</strong> is a variant: it waits for the first 64 bytes, which filters out runts (most collision fragments) before forwarding</td></tr>
       </tbody>
@@ -1041,8 +1041,10 @@
   const TERMS = [
     {t:"Auto-MDIX", d:"Automatic medium-dependent interface crossover. The port detects whether a straight-through or crossover cable is needed and adjusts, so either kind works."},
     {t:"Auto-negotiation", d:"Both ends of a link agree on the best shared speed and duplex. The default on Catalyst 2960 and 3560 ports. A port at 1000 Mb/s runs full duplex only."},
+    {t:"Automatic buffering", d:"In store-and-forward switching, the switch holds the whole frame in memory while it checks the FCS. That also lets it forward between ports of different speeds."},
     {t:"BOOT environment variable", d:"Tells the boot loader which IOS image to load. Set with boot system. If it's not set, the switch loads the first executable file it finds in flash."},
     {t:"Boot loader", d:"A small program in ROM that runs right after POST. It initializes the CPU and flash, then loads the IOS. Its switch: prompt is used for crash recovery."},
+    {t:"boot system", d:"Global configuration command that sets the BOOT variable, the IOS image the switch loads at the next boot, for example boot system flash:/image.bin."},
     {t:"Broadcast domain", d:"Every device that receives a broadcast from any of the others. Switches flood broadcasts; only a Layer 3 device (or, next session, a VLAN) ends a broadcast domain."},
     {t:"CAM table", d:"Content addressable memory table: another name for the switch's MAC address table."},
     {t:"Collision domain", d:"Devices on a shared half-duplex segment that can collide. A full-duplex switch port has no collision domain."},
@@ -1057,6 +1059,7 @@
     {t:"Giant", d:"A frame larger than the maximum allowed size. Usually a bad NIC."},
     {t:"Half duplex", d:"Only one end sends at a time. Collisions are possible. Mostly a legacy, hub-era mode."},
     {t:"Ingress", d:"Entering an interface. The port a frame arrives on."},
+    {t:"ip ssh version 2", d:"Restricts SSH to version 2. The RSA keys must exist first."},
     {t:"ISR4321", d:"The Cisco router used in this course's Packet Tracer activities. Interfaces are named slot/subslot/port, such as G0/0/0 and G0/0/1."},
     {t:"k9", d:"Part of a Cisco IOS image name that means the image includes encryption features. Needed for SSH."},
     {t:"Late collision", d:"A collision after the first 512 bits of a frame have been sent. Usually a duplex mismatch, or a cable that's too long."},
@@ -1065,12 +1068,18 @@
     {t:"MAC address table", d:"The switch's list of MAC addresses and the port each one was learned on. Built from source addresses; used to forward by destination address."},
     {t:"Microsegmentation", d:"One device per switch port, running full duplex, so the port has no collision domain."},
     {t:"Mode button", d:"The button on a Catalyst switch that cycles the port LEDs between status, duplex, speed, and PoE. Held during power-up to reach the boot loader."},
+    {t:"Output filter (include, exclude, section)", d:"Pipe a show command through a filter with |. include shows only matching lines, exclude hides them, and section shows a matching line plus everything indented under it."},
     {t:"POST", d:"Power-on self-test. Runs from ROM at power-up and checks the CPU, DRAM, and flash file system."},
+    {t:"Power over Ethernet (PoE)", d:"Power delivered to a device such as an IP phone, access point, or camera over the same Ethernet cable as its data. PoE switches have a PoE mode LED."},
     {t:"Runt", d:"A frame smaller than the 64-byte minimum. Usually a bad NIC or collisions."},
+    {t:"show flash:", d:"Lists the files in flash, including the IOS image (.bin) and, on a switch, vlan.dat."},
+    {t:"show history", d:"Lists the commands entered in this session: the last 10 by default."},
+    {t:"show ip ssh", d:"Shows whether SSH is enabled, which version is running, and the timeout and retry settings."},
     {t:"SSH", d:"Secure Shell. Encrypted remote management on TCP port 22. Needs a hostname, domain name, RSA keys, and a local user with login local on the vty lines."},
     {t:"Store-and-forward switching", d:"Receives the whole frame and checks the FCS before forwarding. Drops damaged frames and buffers for different port speeds. Cisco's preferred method."},
     {t:"SVI", d:"Switch virtual interface: a virtual interface for a VLAN. On a Layer 2 switch, it holds the management IP address."},
     {t:"Telnet", d:"Remote management on TCP port 23. Sends everything, including passwords, in plaintext. Replace it with SSH."},
+    {t:"terminal history size", d:"Sets how many commands the history buffer keeps for this session, from 0 to 256."},
     {t:"terminal length 0", d:"Stops IOS from pausing long output with --More--."},
   ];
 
