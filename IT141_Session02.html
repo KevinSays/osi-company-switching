@@ -11,7 +11,7 @@
   <div class="wrap">
     <p class="eyebrow">IT141 · SESSION 2 · FIELD NOTES</p>
     <h1>VLANs: Breaking Up the Sprawl</h1>
-    <p class="lede">In CCNA 1, every switch sat in VLAN 1, and every broadcast reached every desk on the floor. You were told that was on purpose. Here's the payoff. This session, Local Dispatch draws walls that aren't really walls: VLANs split one switch into several separate networks, and a trunk carries all of them down a single cable. It's one of the most heavily tested modules in this course, and the foundation for the next four sessions.</p>
+    <p class="lede">In CCNA 1, every switch sat in VLAN 1, and every broadcast reached every desk on the floor. You were told that was on purpose. Here's the payoff. This session, Local Dispatch draws walls that aren't really walls: VLANs split one switch into several separate networks, and a trunk carries all of them down a single cable. Almost everything in the next four sessions is built on it.</p>
     <div class="factrow">
       <span class="fact"><b>New material</b> Module 3 — VLANs</span>
       <span class="fact"><b>Network change</b> S2 moves to HQ; S3 joins at R2</span>
@@ -35,6 +35,7 @@
     <a href="#native">Native Mismatch</a>
     <a href="#dtp">DTP</a>
     <a href="#parking">Parking</a>
+    <a href="#lab">Lab</a>
     <a href="#reach">What Works Now</a>
     <a href="#mistakes">Common Mistakes</a>
     <a href="#ticket">The Ticket</a>
@@ -71,8 +72,8 @@
       <li>Predict which DTP mode combinations form a trunk</li>
     </ul>
     <div class="teach-note">
-      <span class="label">The network this session</span>
-      Two changes are already made in today's Packet Tracer file; you don't recable anything. <strong>S2 moved upstairs to HQ</strong>, connected to S1 by <code>F0/23 ↔ F0/23</code>. A new switch, <strong>S3</strong>, took S2's old desk at R2, keeping the old address <code>192.168.20.2</code> (it's pre-built; switch to Physical view to see the move). Two new PCs sit on S2: <strong>PC-C</strong> on F0/1 (<code>192.168.10.11/24</code>) and <strong>PC-D</strong> on F0/11 (<code>192.168.30.9/26</code>). By the end of the session, HQ has five VLANs.
+      <span class="label">Topology used on this page</span>
+      <strong>S2 has moved upstairs to HQ</strong>, connected to S1 by <code>F0/23 ↔ F0/23</code>. A new switch, <strong>S3</strong>, took S2's old desk at R2, keeping the old address <code>192.168.20.2</code>. Two new PCs sit on S2: <strong>PC-C</strong> on F0/1 (<code>192.168.10.11/24</code>) and <strong>PC-D</strong> on F0/11 (<code>192.168.30.9/26</code>). By the end of the session, HQ has five VLANs.
     </div>
     <table class="spec">
       <thead><tr><th>VLAN</th><th>Name</th><th>Subnet</th><th>Used for</th></tr></thead>
@@ -92,13 +93,13 @@
     <div class="section-head">
       <p class="kicker">Module 3.1</p>
       <h2>The Sprawl: one broadcast domain</h2>
-      <p>Before any VLAN work, every port on S1 and S2 is in VLAN 1. Prove it's a problem first.</p>
+      <p>Before any VLAN work, every port on S1 and S2 is in VLAN 1. Here is why that's a problem.</p>
     </div>
     <div class="teach-note callback">
       <span class="label">CCNA 1 callback</span>
       CCNA 1's final review promised this: "why the lab switches only use VLAN 1." And in <a href="https://kevinsays.github.io/131/">The Zoning Office</a>, The Sprawl was the villain: one giant broadcast domain. In CCNA 1 the only way to split a broadcast domain was a router. Session 1 reminded you why: switches flood broadcasts out every port.
     </div>
-    <p>In today's starting file, S1 F0/23 and S2 F0/23 are both at their factory default, which makes them an ordinary access link in VLAN 1. So the two switches form one big broadcast domain. Make PC-A send a broadcast, then look at S2:</p>
+    <p>With S1 F0/23 and S2 F0/23 both at their factory default, the link between them is an ordinary access link in VLAN 1, so the two switches form one big broadcast domain. When PC-A sends a broadcast, S2 hears it:</p>
     <div class="terminal">
       <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">PC-A · force an ARP broadcast</span></div>
       <div class="terminal-body"><span class="prompt">C:\&gt;</span> <span class="cmd">arp -d</span>
@@ -118,12 +119,8 @@
     <ul class="obj-list">
       <li><strong>PC-A's MAC shows up on S2</strong>, learned on Fa0/23. The only way S2 could learn it is if a frame from PC-A crossed into S2: PC-A's ARP broadcast, flooded by S1 and then flooded again by S2.</li>
       <li><strong>R1's MAC doesn't show up on S2.</strong> R1's reply was a unicast to PC-A, and S1 already knew PC-A was on Fa0/1, so the reply never left S1.</li>
-      <li>Run <code>clear mac address-table dynamic</code> on S2 first for a clean result. Your MAC addresses will differ.</li>
     </ul>
-    <div class="teach-note">
-      <span class="label">See it: Simulation mode</span>
-      In Packet Tracer, switch to <strong>Simulation</strong>, filter for ARP, and repeat the ping. Watch PC-A's broadcast reach PC-C <strong>and PC-D</strong>. PC-D is in a different subnet (<code>192.168.30.0/26</code>), but it's in the same broadcast domain, so it still has to receive the frame and throw it away. Multiply that by every host and every broadcast: that's The Sprawl. (This is the idea behind NetAcad's activity 3.1.4, "Who Hears the Broadcast?")
-    </div>
+    <p>PC-D is in a different subnet (<code>192.168.30.0/26</code>), but it's in the same broadcast domain, so it still has to receive PC-A's broadcast and throw it away. Multiply that by every host and every broadcast: that's The Sprawl.</p>
   </section>
 
   <!-- WHAT A VLAN IS -->
@@ -221,9 +218,9 @@
 <span class="out">1005 trnet-default                    active</span></div>
     </div>
     <p>Every port is in VLAN 1, plus the four reserved VLANs. (A real 2960 writes <code>Gi0/1</code> and shows the reserved VLANs as <code>act/unsup</code>; Packet Tracer writes it as shown.)</p>
-    <h3 class="sub">Step 1: create and name the VLANs</h3>
+    <h3 class="sub">Create and name the VLANs</h3>
     <div class="terminal">
-      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · create VLANs (then the same on S2)</span></div>
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · HQ's VLANs (S2 has the same)</span></div>
       <div class="terminal-body"><span class="prompt">S1#</span> <span class="cmd">configure terminal</span>
 <span class="prompt">S1(config)#</span> <span class="hl">vlan 10</span>
 <span class="prompt">S1(config-vlan)#</span> <span class="hl">name FRONT-DESK</span>
@@ -239,11 +236,11 @@
     </div>
     <ul class="obj-list">
       <li>You can go from one <code>vlan</code> straight to the next without leaving VLAN configuration mode.</li>
-      <li><strong>Every switch needs its own copy</strong> of each VLAN it uses. Run the same block on S2. S3 at R2's site gets none of these; it has its own VLAN 20.</li>
+      <li><strong>Every switch needs its own copy</strong> of each VLAN it uses, so S2 has the same five. S3 at R2's site has none of these; it has its own VLAN 20.</li>
     </ul>
-    <h3 class="sub">Step 2: assign access ports</h3>
+    <h3 class="sub">Assign access ports</h3>
     <div class="terminal">
-      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · access ports (then the same on S2)</span></div>
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · access ports</span></div>
       <div class="terminal-body"><span class="prompt">S1#</span> <span class="cmd">configure terminal</span>
 <span class="prompt">S1(config)#</span> <span class="hl">interface range f0/1 - 10</span>
 <span class="prompt">S1(config-if-range)#</span> <span class="hl">switchport mode access</span>
@@ -262,11 +259,11 @@
     <ul class="obj-list">
       <li><strong><code>switchport mode access</code> first.</strong> It makes the port permanently an access port, so DTP can't turn it into a trunk.</li>
       <li><code>interface range</code> takes a space on each side of the hyphen (<code>f0/1 - 10</code>), and commas join ranges (<code>f0/21 - 22 , f0/24</code>).</li>
-      <li>On S2, run the same block <em>without</em> the <code>g0/1</code> part: S2's G0/1 is parked later today. PC-C ends up in VLAN 10 on F0/1, and PC-D in VLAN 30 on F0/11.</li>
+      <li><strong>S2's access ports are the same,</strong> except G0/1, which is parked (see <a href="#parking">Park the unused ports</a>). PC-C is in VLAN 10 on F0/1, and PC-D in VLAN 30 on F0/11.</li>
       <li>If you assign a port to a VLAN that doesn't exist yet, the switch creates it for you, with a default name such as VLAN0030 instead of yours.</li>
     </ul>
     <h3 class="sub">Example: a voice VLAN</h3>
-    <p>Our network has no IP phones, so this is for the syntax only, on a spare port. Remove it afterward.</p>
+    <p>HQ has no IP phones, so this shows the syntax only, on a spare port.</p>
     <div class="terminal">
       <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · voice VLAN (illustration only)</span></div>
       <div class="terminal-body"><span class="prompt">S1(config)#</span> <span class="cmd">vlan 150</span>
@@ -306,7 +303,7 @@
       Remember the SVI rule from Session 1: an SVI comes up only when a port carrying its VLAN is up. That rule is about to matter.
     </div>
     <div class="terminal">
-      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · retire VLAN 1, build VLAN 99 (S2 uses .12)</span></div>
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · management moves from VLAN 1 to VLAN 99 (S2 uses .12)</span></div>
       <div class="terminal-body"><span class="prompt">S1#</span> <span class="cmd">configure terminal</span>
 <span class="comment">!</span>
 <span class="comment">! Retire the VLAN 1 management address.</span>
@@ -329,16 +326,16 @@
 <span class="hl">Vlan99                 192.168.99.11   YES manual up                    down</span></div>
     </div>
     <div class="teach-note">
-      <span class="label">Up / down is expected right now</span>
-      <code>Vlan99 … up down</code>: the SVI is enabled, but no port that carries VLAN 99 is up. No access port is in VLAN 99, and the trunk doesn't exist yet. When you build the trunk later today, watch for <code>%LINEPROTO-5-UPDOWN: Line protocol on Interface Vlan99, changed state to up</code>.
+      <span class="label">Up / down until the trunk exists</span>
+      <code>Vlan99 … up down</code>: the SVI is enabled, but no port that carries VLAN 99 is up. No access port is in VLAN 99, and until the trunk is built, nothing carries it. When the trunk comes up, IOS logs <code>%LINEPROTO-5-UPDOWN: Line protocol on Interface Vlan99, changed state to up</code>.
     </div>
     <div class="teach-note">
       <span class="label">Notice S3</span>
       S3 at R2's site manages itself on <strong>VLAN 20</strong>, and R2 has never heard of "VLAN 20": R2's port is just a router port. VLAN numbers mean something only inside the switches that have them.
     </div>
     <div class="teach-note warn">
-      <span class="label">You just lost SSH from PC-A, and that's expected</span>
-      PC-A is in VLAN 10. S1's management address is now in VLAN 99. Nothing routes between VLANs yet, so <strong>PC-A can't reach S1 or S2 over the network until Session 3</strong>. Use the console in the meantime.
+      <span class="label">PC-A loses SSH to the switches, and that's expected</span>
+      PC-A is in VLAN 10. S1's management address is now in VLAN 99. Nothing routes between VLANs yet, so <strong>PC-A can't reach S1 or S2 over the network until Session 3</strong>. The console still works.
     </div>
   </section>
 
@@ -436,8 +433,8 @@
 <span class="prompt">S1(config-if)#</span> <span class="hl">no switchport access vlan</span>
 <span class="prompt">S1(config-if)#</span> <span class="cmd">end</span></div>
     </div>
-    <p>F0/10 now shows under VLAN 1. Put it back with <code>switchport access vlan 10</code>.</p>
-    <h3 class="sub">Delete a VLAN that still has ports (try it on S2, then undo)</h3>
+    <p>F0/10 now shows under VLAN 1. <code>switchport access vlan 10</code> puts it back.</p>
+    <h3 class="sub">Delete a VLAN that still has ports</h3>
     <div class="terminal">
       <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S2</span></div>
       <div class="terminal-body"><span class="prompt">S2(config)#</span> <span class="hl">no vlan 30</span>
@@ -469,11 +466,11 @@
   <section id="trunks">
     <div class="section-head">
       <p class="kicker">Module 3.4</p>
-      <h2>Build the trunk: S1 F0/23 ↔ S2 F0/23</h2>
-      <p>The link between the switches has been an ordinary access link in VLAN 1. Now it becomes a trunk carrying VLANs 10, 30, 99, and 900, with 900 as the native VLAN.</p>
+      <h2>Configure an 802.1Q trunk</h2>
+      <p>HQ's switch-to-switch link, S1 F0/23 to S2 F0/23, is a trunk carrying VLANs 10, 30, 99, and 900, with 900 as the native VLAN.</p>
     </div>
     <div class="terminal">
-      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · F0/23 trunk (then exactly the same on S2)</span></div>
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · F0/23, the trunk to S2 (S2 F0/23 is identical)</span></div>
       <div class="terminal-body"><span class="prompt">S1#</span> <span class="cmd">configure terminal</span>
 <span class="prompt">S1(config)#</span> <span class="cmd">interface f0/23</span>
 <span class="prompt">S1(config-if)#</span> <span class="hl">switchport mode trunk</span>
@@ -483,9 +480,9 @@
 <span class="prompt">S1(config-if)#</span> <span class="cmd">end</span></div>
     </div>
     <ul class="obj-list">
-      <li><strong>No encapsulation command.</strong> The 2960 only does 802.1Q. A Layer 3 switch such as the 3560 needs <code>switchport trunk encapsulation dot1q</code> <em>before</em> <code>switchport mode trunk</code>, and NetAcad's Packet Tracer activities type it on the 3650 too. You'll meet one in Session 3.</li>
-      <li><strong>Between configuring S1 and S2</strong>, S1 logs a native VLAN mismatch for a moment, because S2 still uses native 1. It stops once both ends match.</li>
-      <li><strong>Configure both ends.</strong> If S1 is <code>trunk</code> + <code>nonegotiate</code> while S2 is still <code>dynamic auto</code>, S2 never hears a DTP request and stays an access port: a one-sided trunk. <code>nonegotiate</code> belongs only where the far end is also set to <code>trunk</code>.</li>
+      <li><strong>No encapsulation command.</strong> The 2960 only does 802.1Q. A Layer 3 switch such as the 3560 needs <code>switchport trunk encapsulation dot1q</code> <em>before</em> <code>switchport mode trunk</code>, and Packet Tracer's 3650 needs it too. You'll meet one in Session 3.</li>
+      <li><strong>While only one end is configured</strong>, S1 logs a native VLAN mismatch, because S2's F0/23 is still an access port in VLAN 1. It stops once both ends match.</li>
+      <li><strong>Both ends need it.</strong> If S1 is <code>trunk</code> + <code>nonegotiate</code> while S2 is still <code>dynamic auto</code>, S2 never hears a DTP request and stays an access port: a one-sided trunk. <code>nonegotiate</code> belongs only where the far end is also set to <code>trunk</code>.</li>
     </ul>
     <div class="terminal">
       <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · show interfaces trunk</span></div>
@@ -516,7 +513,7 @@
 <span class="prompt">S1(config-if)#</span> <span class="cmd">no switchport trunk native vlan</span>
 <span class="prompt">S1(config-if)#</span> <span class="cmd">end</span></div>
     </div>
-    <p>Now every VLAN is allowed and the native VLAN is 1. To make the port an access port again, use <code>switchport mode access</code>. Then put the course configuration back.</p>
+    <p>That leaves every VLAN allowed and the native VLAN at 1. <code>switchport mode access</code> makes the port an access port again.</p>
   </section>
 
   <!-- NATIVE MISMATCH -->
@@ -526,7 +523,7 @@
       <h2>Native VLAN mismatch</h2>
       <p>The most common trunk mistake, and the one CDP warns you about.</p>
     </div>
-    <p>Try it: on S2 only, run <code>no switchport trunk native vlan</code> on F0/23, which sends S2 back to native VLAN 1. Within a minute:</p>
+    <p>Suppose S2 F0/23 goes back to native VLAN 1 (<code>no switchport trunk native vlan</code>) while S1 keeps 900. Within a minute:</p>
     <div class="terminal">
       <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · console message</span></div>
       <div class="terminal-body"><span class="hl">%CDP-4-NATIVE_VLAN_MISMATCH: Native VLAN mismatch discovered on FastEthernet0/23 (900), with S2 FastEthernet0/23 (1).</span></div>
@@ -570,7 +567,7 @@
         <tr><td><strong>Access</strong></td><td>Access</td><td>Access</td><td><em>Limited connectivity</em></td><td>Access</td></tr>
       </tbody>
     </table>
-    <p><strong>The trap is the top-left cell.</strong> Auto plus auto gives an access link: both ends are willing, but neither one asks. That's exactly how S1 and S2 were cabled at the start of today.</p>
+    <p><strong>The trap is the top-left cell.</strong> Auto plus auto gives an access link: both ends are willing, but neither one asks. That's exactly how S1 and S2 were connected before the trunk was configured.</p>
 
     <div class="tool" id="dtpTool">
       <p class="tool-title">Drill · Will it trunk?</p>
@@ -583,7 +580,7 @@
         <span id="dtpScore" style="font-family:var(--mono); font-size:.85rem; opacity:.75;"></span>
       </div>
     </div>
-    <h3 class="sub">See the trap on today's starting link</h3>
+    <h3 class="sub">The trap on HQ's original link</h3>
     <div class="terminal">
       <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · before the trunk was built</span></div>
       <div class="terminal-body"><span class="prompt">S1#</span> <span class="cmd">show interfaces f0/23 switchport</span>
@@ -603,7 +600,7 @@
       <div class="terminal-body"><span class="prompt">S1(config-if)#</span> <span class="cmd">switchport nonegotiate</span>
 <span class="hl">Command rejected: Conflict between &#x27;nonegotiate&#x27; and &#x27;dynamic&#x27; status.</span></div>
     </div>
-    <p>Set <code>switchport mode trunk</code> (or <code>access</code>) first, then <code>nonegotiate</code>. For the curious: <code>show dtp interface f0/23</code> shows DTP's own view of the port. You won't need it for the exam; <code>show interfaces switchport</code> is the one to know.</p>
+    <p>Set <code>switchport mode trunk</code> (or <code>access</code>) first, then <code>nonegotiate</code>. For the curious: <code>show dtp interface f0/23</code> shows DTP's own view of the port. <code>show interfaces switchport</code> is the one to know.</p>
   </section>
 
   <!-- PARKING -->
@@ -611,7 +608,7 @@
     <div class="section-head">
       <p class="kicker">Preview · Modules 10–11</p>
       <h2>Park the unused ports</h2>
-      <p>One last tidy-up. Ports outside the plan go into VLAN 999, a VLAN with no gateway and no hosts, and get shut down. Session 9 explains why in full; today, just build the habit.</p>
+      <p>One last tidy-up. Ports outside the plan go into VLAN 999, a VLAN with no gateway and no hosts, and get shut down. Session 9 explains why in full; this session builds the habit.</p>
     </div>
     <div class="terminal">
       <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · park the ports outside the plan</span></div>
@@ -626,12 +623,38 @@
     <p>A parked port is doubly safe: it's shut, and even if someone turns it on, they land in a VLAN with no gateway and no other hosts. In Session 9 you'll also park the unused ports <em>inside</em> the VLAN 10 and 30 ranges.</p>
   </section>
 
+  <!-- LAB -->
+  <section id="lab">
+    <div class="section-head">
+      <p class="kicker">Hands-On · Packet Tracer</p>
+      <h2>Lab: put up the walls</h2>
+      <p>Today's file has the two changes in the <a href="#overview">topology note</a> already made, so nothing needs recabling. S3 is pre-built; Physical view shows the move. The configuration is in the sections above. This is the order to do it in.</p>
+    </div>
+    <ol>
+      <li><strong>See The Sprawl first.</strong> On S2, run <code>clear mac address-table dynamic</code> for a clean result. Then force PC-A's ARP broadcast and check S2's MAC table, as in <a href="#sprawl">The Sprawl</a>. Your MAC addresses will differ from the page.</li>
+    </ol>
+    <div class="teach-note">
+      <span class="label">See it: Simulation mode</span>
+      In Packet Tracer, switch to <strong>Simulation</strong>, filter for ARP, and repeat the ping. Watch PC-A's broadcast reach PC-C <strong>and PC-D</strong>. PC-D is in a different subnet (<code>192.168.30.0/26</code>), but it's in the same broadcast domain, so it still has to receive the frame and throw it away. Multiply that by every host and every broadcast: that's The Sprawl.
+    </div>
+    <ol start="2">
+      <li><strong>Create the VLANs on S1, then the same block on S2</strong> (<a href="#create">Create VLANs and assign ports</a>).</li>
+      <li><strong>Assign the access ports on S1, then on S2,</strong> leaving out S2's <code>g0/1</code>, which gets parked at the end.</li>
+      <li><strong>Move management to VLAN 99</strong> on both switches; S2 uses <code>.12</code> (<a href="#mgmt">Move management</a>). Expect <code>Vlan99</code> up/down, and expect PC-A to lose SSH.</li>
+      <li><strong>Build the trunk on S1 F0/23, then exactly the same on S2</strong> (<a href="#trunks">Configure an 802.1Q trunk</a>). S1 logs a native VLAN mismatch between the two; it stops once S2 is done. Watch for <code>Vlan99</code> changing to up.</li>
+      <li><strong>Try the native mismatch:</strong> on S2 only, <code>no switchport trunk native vlan</code> on F0/23. Read the CDP message on both switches, then put <code>switchport trunk native vlan 900</code> back.</li>
+      <li><strong>Practise changing and deleting.</strong> Move S1 F0/10 to VLAN 1 and back. On S2, delete VLAN 30, watch PC-D drop out, then recreate it (<a href="#change">Change, delete, and reset</a>). Reset a whole switch only on a scratch switch, never in the course file. If you try the voice VLAN example, remove it afterwards.</li>
+      <li><strong>Park the unused ports</strong> on both switches (<a href="#parking">Park the unused ports</a>); S2's range is different.</li>
+      <li><strong>Verify</strong> with <a href="#verify">Verify VLANs</a> and <code>show interfaces trunk</code>, then test every row of <a href="#reach">What works now</a>.</li>
+    </ol>
+  </section>
+
   <!-- WHAT WORKS NOW -->
   <section id="reach">
     <div class="section-head">
       <p class="kicker">End of session</p>
       <h2>What works now, and what doesn't</h2>
-      <p>Test every row of this table in Packet Tracer before you leave. The failures are expected, and they're next session's story.</p>
+      <p>HQ at the end of the session. Every row can be tested in Packet Tracer. The failures are expected, and they're next session's story.</p>
     </div>
     <table class="spec">
       <thead><tr><th>From → To</th><th>Result</th><th>Why</th></tr></thead>
@@ -657,7 +680,7 @@
     <div class="section-head">
       <p class="kicker">Watch for this</p>
       <h2>Common Module 3 mistakes</h2>
-      <p>Two of these come up more than any others: access-port VLAN membership, and trunk and DTP settings.</p>
+      <p>Most Module 3 faults are one of two kinds: access-port VLAN membership, or trunk and DTP settings.</p>
     </div>
     <h3 class="sub">1 · A host in the wrong VLAN</h3>
     <p>PC-C's port was left in VLAN 1, or put in VLAN 30. From PC-A, <code>ping 192.168.10.11</code> times out, even though both PCs are on <code>192.168.10.0/24</code>, so the IP settings <em>look</em> fine. <code>show vlan brief</code> on S2 shows Fa0/1 under the wrong VLAN. Fix: <code>switchport access vlan 10</code>.</p>

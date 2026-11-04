@@ -33,6 +33,7 @@
     <a href="#verify">Verify</a>
     <a href="#forwarding">Frame Forwarding</a>
     <a href="#domains">Switching Domains</a>
+    <a href="#lab">Lab</a>
     <a href="#mistakes">Common Mistakes</a>
     <a href="#ticket">The Ticket</a>
     <a href="#checkpoint">Checkpoint</a>
@@ -131,8 +132,8 @@
 <span class="out">Manual Boot         : no</span></div>
     </div>
     <div class="teach-note">
-      <span class="label">Copy the name from your own switch</span>
-      Image names differ between switches and IOS versions. Run <code>show flash:</code> first and copy the <code>.bin</code> file name exactly. <code>boot system</code> only matters when flash holds more than one image.
+      <span class="label">Image names differ</span>
+      Image names differ between switches and IOS versions. <code>show flash:</code> lists the <code>.bin</code> file name, and <code>boot system</code> needs it exactly. <code>boot system</code> only matters when flash holds more than one image.
     </div>
     <h3 class="sub">Reading the LEDs</h3>
     <p>A Catalyst 2960 has a column of system LEDs and a <strong>Mode</strong> button. Pressing Mode cycles the port LEDs between showing status, duplex, speed, and PoE.</p>
@@ -173,7 +174,7 @@
     </div>
     <div class="teach-note">
       <span class="label">Packet Tracer can't do this one</span>
-      Packet Tracer doesn't simulate the boot loader or the Mode button. Know the steps for the exam; you'd practice them on a real switch. <code>flash_init</code> starts the flash file system, <code>dir flash:</code> lists what's there, and <code>boot</code> loads an image by hand. (The same prompt is where password recovery starts, which is beyond this course.)
+      Packet Tracer doesn't simulate the boot loader or the Mode button. Know the steps; you'd practice them on a real switch. <code>flash_init</code> starts the flash file system, <code>dir flash:</code> lists what's there, and <code>boot</code> loads an image by hand. (The same prompt is where password recovery starts, which is beyond this course.)
     </div>
   </section>
 
@@ -314,7 +315,7 @@
     <div class="section-head">
       <p class="kicker">Module 1.3</p>
       <h2>Secure remote access: SSH</h2>
-      <p>SSH on R1, S1 and S2 is a core task on this course's hands-on skills exam. It isn't new. The skill is doing it quickly and getting every step right the first time.</p>
+      <p>SSH isn't new from CCNA 1, and it comes back in almost every session from here on. The skill now is doing it quickly and getting every step right the first time.</p>
     </div>
     <div class="teach-note callback">
       <span class="label">CCNA 1 callback</span>
@@ -483,10 +484,6 @@
         <tr><td class="mono">show ip route<br>show ipv6 route</td><td>See the routing table: connected networks (<code>C</code>) and local addresses (<code>L</code>)</td></tr>
       </tbody>
     </table>
-    <div class="teach-note">
-      <span class="label">Your screen may differ</span>
-      Output on this page is written to match Packet Tracer as closely as we can, but MAC addresses, counters, byte counts, and timestamps will be different on your screen. Packet Tracer sometimes adds or leaves out a line, too. Read for the lines this page highlights.
-    </div>
     <div class="terminal">
       <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">R1 · show ip interface brief</span></div>
       <div class="terminal-body"><span class="prompt">R1#</span> <span class="cmd">show ip interface brief</span>
@@ -679,11 +676,7 @@
       <li>R1's ARP reply arrives on Gi0/1. S1 learns R1's MAC on Gi0/1 and forwards the reply out Fa0/1 only.</li>
       <li>Every ping after that is <strong>forwarded</strong> port to port. No more flooding.</li>
     </ol>
-    <div class="teach-note">
-      <span class="label">Match it to your screen</span>
-      Your MAC addresses will differ. Check them yourself: PC-A's with <code>ipconfig /all</code>, R1's with <code>show interfaces g0/0/1</code>. If the "empty" table already has R1 in it, that's normal: R1's own periodic traffic (CDP, for one) can refill it within seconds. TTL=255 is the router replying; a Windows PC would reply with 128. In Packet Tracer the first ping sometimes times out while ARP resolves.
-    </div>
-
+    <p>TTL=255 in the ping reply is the router replying; a Windows PC would reply with 128.</p>
     <div class="tool" id="dispatchTool">
       <p class="tool-title">Drill · You are the switch</p>
       <p style="margin:0 0 10px; font-size:.9rem;">A four-port switch, hosts A–D, one host per port. The table starts empty. For each frame, decide what the switch does. Then watch the table update.</p>
@@ -747,6 +740,32 @@
     </div>
   </section>
 
+  <!-- LAB -->
+  <section id="lab">
+    <div class="section-head">
+      <p class="kicker">Hands-On · Packet Tracer</p>
+      <h2>Lab: configure, secure, verify</h2>
+      <p>The cold open's clipboard, in order. In today's file R2 is pre-built, with its default routes back to R1. R1, S1 and S2 start blank. The configuration is in the sections above.</p>
+    </div>
+    <div class="teach-note">
+      <span class="label">Your screen may differ</span>
+      Output on this page is written to match Packet Tracer as closely as we can, but MAC addresses, counters, byte counts, and timestamps will be different on your screen. Packet Tracer sometimes adds or leaves out a line, too. Read for the lines this page highlights.
+    </div>
+    <ol>
+      <li><strong>S1, then S2: initial settings and the management SVI</strong> (<a href="#svi">Switch management access</a>). S2 uses its own hostname, <code>192.168.20.2</code>, and gateway <code>192.168.20.1</code>.</li>
+      <li><strong>Force a port's speed and duplex, read <code>show interfaces</code>, then put it back</strong> (<a href="#ports">Switch ports</a>).</li>
+      <li><strong>R1: basic settings, both interfaces, the loopback, and the provided routes</strong> (<a href="#router">Basic router configuration</a>).</li>
+      <li><strong>SSH on S1, S2 and R1,</strong> then log in to all three from PC-A (<a href="#ssh">Secure remote access</a>).</li>
+      <li><strong>Verify</strong> with <a href="#verify">Verify directly connected networks</a>, and try the filters and command history on S1.</li>
+      <li><strong>Watch S1 learn:</strong> empty its MAC table, ping the gateway from PC-A, and read the table again (<a href="#forwarding">How Local Dispatch forwards a frame</a>).</li>
+    </ol>
+    <div class="teach-note">
+      <span class="label">Match it to your screen</span>
+      Your MAC addresses will differ. Check them yourself: PC-A's with <code>ipconfig /all</code>, R1's with <code>show interfaces g0/0/1</code>. If the "empty" table already has R1 in it, that's normal: R1's own periodic traffic (CDP, for one) can refill it within seconds. In Packet Tracer the first ping sometimes times out while ARP resolves.
+    </div>
+
+  </section>
+
   <!-- MISTAKES -->
   <section id="mistakes">
     <div class="section-head">
@@ -806,7 +825,7 @@
     <div class="section-head">
       <p class="kicker">Recurring segment</p>
       <h2>The Ticket</h2>
-      <p>Real work orders don't come as step-by-step lists, and neither does this course's skills exam. Each session ends with a ticket. Turn it into steps <em>before</em> you open Packet Tracer.</p>
+      <p>Real work orders don't come as step-by-step lists. Each session ends with a ticket. Turn it into steps <em>before</em> you open Packet Tracer.</p>
     </div>
     <div class="ticket-card">
       <p class="tag">Ticket #141-01 · Priority: normal · From: the NOC</p>
@@ -891,7 +910,7 @@
       <h3>Pings from S1's LAN work, but not from across the router</h3>
       <p>S2 (<code>192.168.20.2</code>, on R2's LAN) answers pings from PC-B, which is on the same LAN. From PC-A, across R1 and R2, pings to S2 fail, even though PC-A can ping PC-B. What's missing on S2?</p>
       <details class="solution"><summary>Show answer</summary><div class="solbody">
-        <p>S2's <strong>default gateway</strong>. The ping reaches S2 fine, but S2 has no idea how to send the reply to <code>192.168.10.10</code>, which isn't on its own subnet. Fix: <code>ip default-gateway 192.168.20.1</code> on S2. PC-B works because it's on the same subnet, so no gateway is needed. It's also a classic reason "SSH to S2" fails under exam pressure.</p>
+        <p>S2's <strong>default gateway</strong>. The ping reaches S2 fine, but S2 has no idea how to send the reply to <code>192.168.10.10</code>, which isn't on its own subnet. Fix: <code>ip default-gateway 192.168.20.1</code> on S2. PC-B works because it's on the same subnet, so no gateway is needed. It's also a classic reason "SSH to S2" fails.</p>
       </div></details>
     </div>
 
