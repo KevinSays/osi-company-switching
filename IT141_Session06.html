@@ -1,0 +1,819 @@
+<meta charset="utf-8">
+<title>IT141 Session 6 – DHCPv4</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/theme.css">
+<script src="assets/site.js" defer></script>
+
+<header class="masthead">
+  <div class="wrap">
+    <p class="eyebrow">IT141 · SESSION 6 · FIELD NOTES</p>
+    <h1>DHCPv4: New Hire Day</h1>
+    <p class="lede">Every host at the OSI Company has an address someone typed in by hand. That was fine for four PCs. It isn't fine for a floor of new hires. This session R1 becomes the onboarding desk, leasing addresses, gateways and DNS servers automatically. There's one problem: the new hires shout their requests as broadcasts, and broadcasts don't cross a router. D1 learns to carry the message.</p>
+    <div class="factrow">
+      <span class="fact"><b>Exam</b> Module group 5–6</span>
+      <span class="fact"><b>New material</b> Module 7 — DHCPv4</span>
+      <span class="fact"><b>Network change</b> hosts move to DHCP; the home router's WAN port</span>
+      <span class="fact"><b>Next session</b> Module 8 — SLAAC and DHCPv6; Module 9 — FHRP</span>
+    </div>
+  </div>
+</header>
+
+<nav class="index" data-pin="#flashcards #quiz" aria-label="Section index">
+  <div class="wrap">
+    <a href="index.html" class="toc-link">↩ Contents</a>
+    <a href="#overview">Overview</a>
+    <a href="#exam">Exam Review</a>
+    <a href="#dora">How DHCP Works</a>
+    <a href="#lease">Leases</a>
+    <a href="#server">Configure a Server</a>
+    <a href="#relay">Relay</a>
+    <a href="#direct">R2's Own Pool</a>
+    <a href="#verify">Verify</a>
+    <a href="#client">Routers as Clients</a>
+    <a href="#troubleshoot">Troubleshoot</a>
+    <a href="#lab">Lab</a>
+    <a href="#mistakes">Common Mistakes</a>
+    <a href="#reach">What Works Now</a>
+    <a href="#ticket">The Ticket</a>
+    <a href="#checkpoint">Checkpoint</a>
+    <a href="#flashcards">Flashcards</a>
+    <a href="#quiz">Quiz</a>
+    <a href="#examples">Examples</a>
+    <a href="#glossary">Glossary</a>
+  </div>
+</nav>
+
+<main class="wrap">
+
+  <!-- OVERVIEW -->
+  <section id="overview">
+    <div class="section-head">
+      <p class="kicker">Module 7</p>
+      <h2>What Session 6 covers</h2>
+      <p>The module-group exam on Modules 5–6 comes first. Then one module, in NetAcad's order: how DHCPv4 works; configuring a Cisco router as a DHCPv4 server, including relaying requests from other subnets; and configuring a router as a DHCPv4 client.</p>
+    </div>
+    <div class="cold-open">
+      <p class="tag">Cold open · Local Dispatch, New Hire Day</p>
+      <p>Twelve new laptops arrive at Front Desk on a cart. The Rookie looks at the stack, then at the spreadsheet of addresses, then at the clock. "We're not typing twelve addresses," says the Surveyor. "R1 hands them out. That's what the onboarding desk is for." The Rookie plugs in the first laptop and waits. Nothing. It gives itself a 169.254 address and sulks. "It's shouting," the Surveyor says, pointing at the capture. "It doesn't know where the desk is, so it asks the whole room. But the desk is two doors away, and shouts don't go through doors." She taps D1. "Somebody in the room has to hear the shout and walk it over."</p>
+    </div>
+    <ul class="obj-list">
+      <li>Explain how a client gets an address with DHCPv4: discover, offer, request, acknowledge</li>
+      <li>Explain leases, and when a client renews</li>
+      <li>Configure a Cisco router as a DHCPv4 server: excluded addresses, a pool, the network, default router, DNS server and domain name</li>
+      <li>Explain why DHCP requests don't cross a router, and configure a relay with <code>ip helper-address</code></li>
+      <li>Verify DHCP on the server and the clients</li>
+      <li>Configure a router interface, and a home router's internet port, as DHCPv4 clients</li>
+      <li>Troubleshoot clients that end up with 169.254 addresses, or the wrong settings</li>
+      <li><strong>In the lab:</strong> move HQ and the Shipping site to DHCP, through a relay at HQ and directly at R2</li>
+    </ul>
+    <div class="teach-note">
+      <span class="label">Topology used on this page</span>
+      HQ as Session 5 left it: three EtherChannels in a triangle, D1 as the gateway for VLANs 10, 30 and 99, and D1's routed link to R1 (<code>10.0.0.8/30</code>). R1 becomes the DHCP server for HQ, on a different subnet from every host, so D1 relays for it. At the Shipping site, R2 serves its own LAN, <code>192.168.20.0/24</code>, directly. The addressing rule stays the same: in each /24, <code>.1</code>–<code>.100</code> are static and <code>.101</code> up are leased.
+    </div>
+  </section>
+
+  <!-- EXAM REVIEW -->
+  <section id="exam">
+    <div class="section-head">
+      <p class="kicker">Module group exam</p>
+      <h2>Modules 5–6: cross-module review</h2>
+      <p>The exam covers Spanning Tree and EtherChannel. If you can answer these cold, Sessions 4 and 5 have landed.</p>
+    </div>
+    <ul class="obj-list">
+      <li><strong>Lowest bridge ID is root:</strong> priority first (default 32768 plus the VLAN number), then the lowest MAC. Priorities go in steps of 4096 (Session 4).</li>
+      <li><strong>Root port, then designated port, then whatever's left blocks.</strong> Ties go to the lower sender bridge ID, then the lower sender port ID (Session 4).</li>
+      <li><strong>802.1D timers:</strong> hello 2 s, forward delay 15 s, max age 20 s, so 30 to 50 seconds to recover. Rapid PVST+ gets that down to about a second (Sessions 4 and 5).</li>
+      <li><strong>PAgP is Cisco's</strong> (desirable/auto); <strong>LACP is the standard</strong> (active/passive). Auto + auto and passive + passive never bundle, and the two protocols never mix (Session 5).</li>
+      <li><strong>Members must match</strong> in speed, duplex, mode and VLANs, and trunk settings go on the port-channel (Session 5).</li>
+    </ul>
+    <div class="teach-note">
+      <span class="label">Where to actually study</span>
+      The checkpoints, flashcards and quizzes for <a href="IT141_Session04.html#checkpoint">Session 4</a> and <a href="IT141_Session05.html#checkpoint">Session 5</a>, plus the <a href="IT141_Session04.html#rootdrill">election drill</a> and the <a href="IT141_Session05.html#bundledrill">bundle drill</a>.
+    </div>
+  </section>
+
+  <!-- DORA -->
+  <section id="dora">
+    <div class="section-head">
+      <p class="kicker">Module 7.1</p>
+      <h2>How DHCPv4 works</h2>
+      <p><strong>DHCPv4</strong> (Dynamic Host Configuration Protocol) hands a host everything it needs to use the network: an IPv4 address and mask, a default gateway, DNS servers, and a domain name. The address is <strong>leased</strong>, not given: the host borrows it for a set time.</p>
+    </div>
+    <div class="teach-note callback">
+      <span class="label">CCNA 1 callback</span>
+      In <a href="https://kevinsays.github.io/131/">CCNA 1</a> you met DORA and learned which of its messages are broadcasts, and you used a 169.254 address as the clue that DHCP had failed. Configuring the server, and <code>ipconfig /release</code> and <code>/renew</code>, were left for CCNA 2. Here they are.
+    </div>
+    <p>A new client has no address and doesn't know where the server is, so it starts with a broadcast. Four messages follow, often remembered as <strong>DORA</strong>:</p>
+    <figure class="diagram">
+      <svg viewBox="0 0 360 250" style="max-width:460px" role="img" aria-label="DORA between a client and a DHCP server on the same subnet: Discover broadcast, Offer usually unicast, Request broadcast, Ack usually unicast.">
+        <defs><marker id="doraR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#A23A2E"/></marker><marker id="doraG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#3F6B4A"/></marker></defs>
+        <g font-family="IBM Plex Mono" font-size="12" fill="currentColor">
+          <rect x="18" y="6" width="104" height="38" fill="none" stroke="currentColor" stroke-width="1.5"/><text x="70" y="22" text-anchor="middle" font-weight="600">Client</text><text x="70" y="37" text-anchor="middle" font-size="10">no address yet</text><line x1="70" y1="44" x2="70" y2="240" stroke="currentColor" stroke-width="1" stroke-dasharray="3 3" opacity=".6"/>
+          <rect x="238" y="6" width="104" height="38" fill="#3F6B4A" fill-opacity=".14" stroke="#3F6B4A" stroke-width="1.5"/><text x="290" y="22" text-anchor="middle" font-weight="600" fill="#3F6B4A">DHCP server</text><text x="290" y="37" text-anchor="middle" font-size="10" fill="#3F6B4A">UDP 67</text><line x1="290" y1="44" x2="290" y2="240" stroke="currentColor" stroke-width="1" stroke-dasharray="3 3" opacity=".6"/>
+          <line x1="72" y1="76" x2="288" y2="76" stroke="#A23A2E" stroke-width="1.8" marker-end="url(#doraR)"/><text x="180.0" y="70" text-anchor="middle" font-size="11" font-weight="600" fill="#A23A2E">1 · DISCOVER</text><text x="180.0" y="90" text-anchor="middle" font-size="10" fill="#A23A2E">broadcast</text>
+          <line x1="288" y1="120" x2="72" y2="120" stroke="#3F6B4A" stroke-width="1.8" marker-end="url(#doraG)"/><text x="180.0" y="114" text-anchor="middle" font-size="11" font-weight="600" fill="#3F6B4A">2 · OFFER</text><text x="180.0" y="134" text-anchor="middle" font-size="10" fill="#3F6B4A">usually unicast</text>
+          <line x1="72" y1="164" x2="288" y2="164" stroke="#A23A2E" stroke-width="1.8" marker-end="url(#doraR)"/><text x="180.0" y="158" text-anchor="middle" font-size="11" font-weight="600" fill="#A23A2E">3 · REQUEST</text><text x="180.0" y="178" text-anchor="middle" font-size="10" fill="#A23A2E">broadcast</text>
+          <line x1="288" y1="208" x2="72" y2="208" stroke="#3F6B4A" stroke-width="1.8" marker-end="url(#doraG)"/><text x="180.0" y="202" text-anchor="middle" font-size="11" font-weight="600" fill="#3F6B4A">4 · ACK</text><text x="180.0" y="222" text-anchor="middle" font-size="10" fill="#3F6B4A">usually unicast</text>
+        </g>
+      </svg>
+      <figcaption>Figure 1. DORA on one subnet. The client's two messages are broadcasts, because it has no address and doesn't know where the server is. The server's two replies are usually unicast to the client's MAC address.</figcaption>
+    </figure>
+
+    <table class="spec">
+      <thead><tr><th>Message</th><th>From → to</th><th>What it says</th></tr></thead>
+      <tbody>
+        <tr><td><strong>DHCPDISCOVER</strong></td><td>Client → everyone (broadcast)</td><td>"I need an address. Is there a DHCP server out there?" The client has no address yet, so it sends from <code>0.0.0.0</code> to <code>255.255.255.255</code>.</td></tr>
+        <tr><td><strong>DHCPOFFER</strong></td><td>Server → client (usually unicast)</td><td>"You can have this address, with this mask, gateway and DNS server, for this long." The server reserves the address while it waits.</td></tr>
+        <tr><td><strong>DHCPREQUEST</strong></td><td>Client → everyone (broadcast)</td><td>"I'll take the offer from that server." Broadcast, so any other server that made an offer can withdraw it.</td></tr>
+        <tr><td><strong>DHCPACK</strong></td><td>Server → client (usually unicast)</td><td>"Confirmed. The lease starts now." The client checks nobody else is using the address (with ARP), then uses it.</td></tr>
+      </tbody>
+    </table>
+    <ul class="obj-list">
+      <li><strong>Ports:</strong> clients use UDP 68 and servers UDP 67.</li>
+      <li><strong>If no server answers,</strong> a Windows client gives itself an APIPA address in <code>169.254.0.0/16</code> and keeps trying. A 169.254 address always means "DHCP failed".</li>
+      <li><strong>If the server refuses</strong> a request (the address is no longer free, for example), it sends a <strong>DHCPNAK</strong>, and the client starts again with a discover.</li>
+    </ul>
+  </section>
+
+  <!-- LEASE -->
+  <section id="lease">
+    <div class="section-head">
+      <p class="kicker">Module 7.1</p>
+      <h2>Leases and renewal</h2>
+      <p>A lease has an expiry time, one day by default on a Cisco router. A client doesn't wait for the end: it renews well before.</p>
+    </div>
+    <table class="spec">
+      <thead><tr><th>When</th><th>What the client does</th></tr></thead>
+      <tbody>
+        <tr><td><strong>50% of the lease</strong> (T1)</td><td>Sends a DHCPREQUEST straight to the server that gave it the lease (unicast). The server answers with a DHCPACK, and the lease starts over. No discover, no offer.</td></tr>
+        <tr><td><strong>87.5% of the lease</strong> (T2)</td><td>If its own server never answered, it broadcasts a DHCPREQUEST, so any server can renew it.</td></tr>
+        <tr><td><strong>Lease expires</strong></td><td>It stops using the address and starts over with a DHCPDISCOVER.</td></tr>
+      </tbody>
+    </table>
+    <p>A shorter lease frees unused addresses faster, which suits a busy guest network; a longer one means less DHCP traffic. On a Windows PC, <code>ipconfig /release</code> gives the lease back and <code>ipconfig /renew</code> asks for one, which is how you test DHCP without waiting.</p>
+  </section>
+
+  <!-- SERVER -->
+  <section id="server">
+    <div class="section-head">
+      <p class="kicker">Module 7.2</p>
+      <h2>Configure a Cisco router as a DHCPv4 server</h2>
+      <p>A Cisco IOS router can be a full DHCP server. Two pieces of configuration: the addresses it must <strong>never</strong> hand out, and a <strong>pool</strong> for each subnet it serves.</p>
+    </div>
+    <p>HQ's design rule decides the pools: in each /24, <code>.1</code>–<code>.100</code> are for static devices and are <strong>excluded</strong>, and the rest is leased. VLAN 30 is a /26, so its excluded block is smaller.</p>
+    <table class="spec">
+      <thead><tr><th>VLAN</th><th>Subnet</th><th>Excluded</th><th>Leased</th><th>Addresses</th></tr></thead>
+      <tbody>
+        <tr><td>10</td><td><code>192.168.10.0/24</code></td><td>.1–.100</td><td>.101–.254</td><td>154</td></tr>
+        <tr><td>30</td><td><code>192.168.30.0/26</code></td><td>.1–.9</td><td>.10–.62</td><td>53</td></tr>
+        <tr><td>99</td><td><code>192.168.99.0/24</code></td><td>.1–.100</td><td>.101–.254</td><td>154, with no clients until Session 10</td></tr>
+      </tbody>
+    </table>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">R1 · exclusions first, then one pool per VLAN</span></div>
+      <div class="terminal-body"><span class="prompt">R1#</span> <span class="cmd">configure terminal</span>
+<span class="comment">! Exclusions are global, not inside a pool. Do them first, so no address leaks out</span>
+<span class="comment">! before the range is protected.</span>
+<span class="prompt">R1(config)#</span> <span class="hl">ip dhcp excluded-address 192.168.10.1 192.168.10.100</span>
+<span class="prompt">R1(config)#</span> <span class="cmd">ip dhcp excluded-address 192.168.30.1 192.168.30.9</span>
+<span class="prompt">R1(config)#</span> <span class="cmd">ip dhcp excluded-address 192.168.99.1 192.168.99.100</span>
+<span class="comment">!</span>
+<span class="prompt">R1(config)#</span> <span class="hl">ip dhcp pool HQ-VLAN10</span>
+<span class="prompt">R1(dhcp-config)#</span> <span class="cmd">network 192.168.10.0 255.255.255.0</span>
+<span class="comment">! The gateway is D1&#x27;s SVI. R1 isn&#x27;t on this subnet at all.</span>
+<span class="prompt">R1(dhcp-config)#</span> <span class="hl">default-router 192.168.10.1</span>
+<span class="prompt">R1(dhcp-config)#</span> <span class="cmd">dns-server 192.168.20.100</span>
+<span class="prompt">R1(dhcp-config)#</span> <span class="cmd">domain-name it141.example</span>
+<span class="prompt">R1(dhcp-config)#</span> <span class="cmd">exit</span>
+<span class="comment">!</span>
+<span class="prompt">R1(config)#</span> <span class="cmd">ip dhcp pool HQ-VLAN30</span>
+<span class="comment">! The /26 mask. A /24 here is the classic mistake.</span>
+<span class="prompt">R1(dhcp-config)#</span> <span class="hl">network 192.168.30.0 255.255.255.192</span>
+<span class="prompt">R1(dhcp-config)#</span> <span class="cmd">default-router 192.168.30.1</span>
+<span class="prompt">R1(dhcp-config)#</span> <span class="cmd">dns-server 192.168.20.100</span>
+<span class="prompt">R1(dhcp-config)#</span> <span class="cmd">domain-name it141.example</span>
+<span class="prompt">R1(dhcp-config)#</span> <span class="cmd">exit</span>
+<span class="comment">!</span>
+<span class="prompt">R1(config)#</span> <span class="cmd">ip dhcp pool HQ-VLAN99</span>
+<span class="prompt">R1(dhcp-config)#</span> <span class="cmd">network 192.168.99.0 255.255.255.0</span>
+<span class="prompt">R1(dhcp-config)#</span> <span class="cmd">default-router 192.168.99.1</span>
+<span class="prompt">R1(dhcp-config)#</span> <span class="cmd">dns-server 192.168.20.100</span>
+<span class="prompt">R1(dhcp-config)#</span> <span class="cmd">domain-name it141.example</span>
+<span class="prompt">R1(dhcp-config)#</span> <span class="cmd">end</span>
+<span class="prompt">R1#</span> <span class="cmd">copy running-config startup-config</span></div>
+    </div>
+    <table class="spec">
+      <thead><tr><th>Command</th><th>What it sets</th></tr></thead>
+      <tbody>
+        <tr><td><code>ip dhcp excluded-address</code> <em>low</em> [<em>high</em>]</td><td>Addresses never leased: gateways, servers, printers, anything static</td></tr>
+        <tr><td><code>ip dhcp pool</code> <em>name</em></td><td>Creates a pool and enters <code>dhcp-config</code> mode. The name is a local label, and case-sensitive.</td></tr>
+        <tr><td><code>network</code> <em>address mask</em></td><td>The subnet the pool leases from. This, not the name, ties a pool to a VLAN.</td></tr>
+        <tr><td><code>default-router</code> <em>address</em></td><td>The gateway the <em>client</em> will use: D1's SVI, never the server's own address</td></tr>
+        <tr><td><code>dns-server</code> <em>address</em></td><td>The DNS server (SRV1)</td></tr>
+        <tr><td><code>domain-name</code> <em>name</em></td><td>The DNS suffix, <code>it141.example</code></td></tr>
+        <tr><td><code>lease</code> <em>days</em> [<em>hours</em> [<em>minutes</em>]] | <code>infinite</code></td><td>The lease time. HQ keeps the 1-day default; <code>lease 0 8</code> would be 8 hours.</td></tr>
+      </tbody>
+    </table>
+    <ul class="obj-list">
+      <li><strong>No interface command on R1.</strong> A DHCP server needs none; <code>service dhcp</code> is on by default.</li>
+      <li><strong>The VLAN 99 pool has no clients yet.</strong> S1 and S2 have static addresses inside the excluded block. The pool is ready for the wireless access point in Session 10. A pool with no bindings is normal.</li>
+      <li><strong>Nothing reaches R1 yet.</strong> Every HQ client is on a different subnet from R1, behind D1. The next section is why.</li>
+    </ul>
+
+  </section>
+
+  <!-- RELAY -->
+  <section id="relay">
+    <div class="section-head">
+      <p class="kicker">Module 7.2</p>
+      <h2>DHCP relay: carrying the shout across the door</h2>
+      <p>A DHCPDISCOVER is a broadcast, and routers don't forward broadcasts. A PC in VLAN 30 shouts, D1 hears it on its Vlan30 SVI, and the message stops there. R1, the server, never hears it. A <strong>DHCP relay agent</strong> fixes that.</p>
+    </div>
+    <figure class="diagram">
+      <svg viewBox="0 0 360 300" style="max-width:480px" role="img" aria-label="DHCP through a relay at HQ: PC-C broadcasts a Discover on VLAN 10; D1 receives it on its Vlan10 SVI, writes giaddr 192.168.10.1 and sends it as a unicast to R1 at 10.0.0.9; R1 picks the VLAN 10 pool from the giaddr and sends the Offer back to 192.168.10.1; D1 passes it to PC-C. The Request and Ack follow the same path.">
+        <defs><marker id="rlyR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#A23A2E"/></marker><marker id="rlyG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#3F6B4A"/></marker></defs>
+        <g font-family="IBM Plex Mono" font-size="12" fill="currentColor">
+          <rect x="-2" y="6" width="104" height="38" fill="none" stroke="currentColor" stroke-width="1.5"/><text x="50" y="22" text-anchor="middle" font-weight="600">PC-C</text><text x="50" y="37" text-anchor="middle" font-size="10">VLAN 10</text><line x1="50" y1="44" x2="50" y2="290" stroke="currentColor" stroke-width="1" stroke-dasharray="3 3" opacity=".6"/>
+          <rect x="128" y="6" width="104" height="38" fill="#3F6B4A" fill-opacity=".14" stroke="#3F6B4A" stroke-width="1.5"/><text x="180" y="22" text-anchor="middle" font-weight="600" fill="#3F6B4A">D1</text><text x="180" y="37" text-anchor="middle" font-size="10" fill="#3F6B4A">relay · Vlan10</text><line x1="180" y1="44" x2="180" y2="290" stroke="currentColor" stroke-width="1" stroke-dasharray="3 3" opacity=".6"/>
+          <rect x="258" y="6" width="104" height="38" fill="none" stroke="currentColor" stroke-width="1.5"/><text x="310" y="22" text-anchor="middle" font-weight="600">R1</text><text x="310" y="37" text-anchor="middle" font-size="10">server .9</text><line x1="310" y1="44" x2="310" y2="290" stroke="currentColor" stroke-width="1" stroke-dasharray="3 3" opacity=".6"/>
+          <line x1="52" y1="74" x2="178" y2="74" stroke="#A23A2E" stroke-width="1.8" marker-end="url(#rlyR)"/><text x="115.0" y="68" text-anchor="middle" font-size="11" font-weight="600" fill="#A23A2E">DISCOVER</text><text x="115.0" y="88" text-anchor="middle" font-size="10" fill="#A23A2E">broadcast</text>
+          <line x1="182" y1="112" x2="308" y2="112" stroke="#A23A2E" stroke-width="1.8" marker-end="url(#rlyR)"/><text x="245.0" y="106" text-anchor="middle" font-size="11" font-weight="600" fill="#A23A2E">unicast</text><text x="245.0" y="126" text-anchor="middle" font-size="10" fill="#A23A2E">to 10.0.0.9</text>
+          <text x="245" y="140" text-anchor="middle" font-size="10" fill="#A23A2E">giaddr 192.168.10.1</text>
+          <line x1="308" y1="172" x2="182" y2="172" stroke="#3F6B4A" stroke-width="1.8" marker-end="url(#rlyG)"/><text x="245.0" y="166" text-anchor="middle" font-size="11" font-weight="600" fill="#3F6B4A">OFFER</text><text x="245.0" y="186" text-anchor="middle" font-size="10" fill="#3F6B4A">to the giaddr</text>
+          <line x1="178" y1="210" x2="52" y2="210" stroke="#3F6B4A" stroke-width="1.8" marker-end="url(#rlyG)"/><text x="115.0" y="204" text-anchor="middle" font-size="11" font-weight="600" fill="#3F6B4A">OFFER</text><text x="115.0" y="224" text-anchor="middle" font-size="10" fill="#3F6B4A">onto VLAN 10</text>
+          <text x="180" y="256" text-anchor="middle" font-size="10.5">REQUEST and ACK take the same</text>
+          <text x="180" y="272" text-anchor="middle" font-size="10.5">two legs each way</text>
+        </g>
+      </svg>
+      <figcaption>Figure 2. The same exchange through HQ's relay. The broadcast stops at D1, so D1 forwards it to R1 as a unicast and writes its own Vlan10 address in the giaddr field. R1 uses the giaddr twice: to choose the VLAN 10 pool, and as the address to send its reply to.</figcaption>
+    </figure>
+    <p>A relay agent is an interface that listens for DHCP broadcasts from clients and forwards each one as a <strong>unicast</strong> to a server address it has been given. On a Cisco router or Layer 3 switch, that's one command on the interface where the clients' broadcasts arrive: <code>ip helper-address</code>.</p>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">D1 · one helper on each SVI</span></div>
+      <div class="terminal-body"><span class="prompt">D1#</span> <span class="cmd">configure terminal</span>
+<span class="prompt">D1(config)#</span> <span class="cmd">interface vlan 10</span>
+<span class="prompt">D1(config-if)#</span> <span class="hl">ip helper-address 10.0.0.9</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">exit</span>
+<span class="prompt">D1(config)#</span> <span class="cmd">interface vlan 30</span>
+<span class="prompt">D1(config-if)#</span> <span class="hl">ip helper-address 10.0.0.9</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">exit</span>
+<span class="comment">! No VLAN 99 client until Session 10, but the relay is ready with the pool.</span>
+<span class="prompt">D1(config)#</span> <span class="cmd">interface vlan 99</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">ip helper-address 10.0.0.9</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">end</span>
+<span class="prompt">D1#</span> <span class="cmd">copy running-config startup-config</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong>On the SVI, not on the link to R1.</strong> The helper goes where the broadcasts <em>arrive</em>. On G1/0/24 it would do nothing for anyone.</li>
+      <li><strong>One helper per VLAN.</strong> A VLAN without one gets nothing.</li>
+      <li><strong>Why <code>10.0.0.9</code>?</strong> It's R1's address on the link to D1, directly connected, so it needs no route. R1's other address, <code>10.0.0.1</code>, faces R2: if that link failed, HQ's DHCP would fail with it, even though nothing between HQ and R1 broke. Point the helper at the server's nearest door.</li>
+      <li><strong>It relays more than DHCP.</strong> By default, <code>ip helper-address</code> forwards broadcasts for eight UDP services, including DNS (53), TFTP (69) and NetBIOS (137, 138), as well as DHCP (67, 68).</li>
+    </ul>
+    <h3 class="sub">The giaddr: two jobs</h3>
+    <p>When D1 relays, it writes the address of the interface the broadcast arrived on, <code>192.168.10.1</code>, into the message's <strong>giaddr</strong> (gateway IP address) field. R1 uses it twice:</p>
+    <ul class="obj-list">
+      <li><strong>To choose the pool.</strong> <code>192.168.10.1</code> is inside <code>192.168.10.0/24</code>, so the offer comes from HQ-VLAN10. The same request relayed by Vlan30 would get a VLAN 30 address.</li>
+      <li><strong>As the address to reply to.</strong> R1 sends the offer to <code>192.168.10.1</code>. So R1 needs a route back to every giaddr.</li>
+    </ul>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">R1 · the routes back to every giaddr (from Session 3)</span></div>
+      <div class="terminal-body"><span class="prompt">R1#</span> <span class="cmd">show ip route static</span>
+<span class="out">...</span>
+<span class="out">S        192.168.10.0/24 [1/0] via 10.0.0.10</span>
+<span class="out">S        192.168.20.0/24 [1/0] via 10.0.0.2</span>
+<span class="out">      192.168.30.0/26 is subnetted, 1 subnets</span>
+<span class="out">S        192.168.30.0 [1/0] via 10.0.0.10</span>
+<span class="out">S        192.168.99.0/24 [1/0] via 10.0.0.10</span></div>
+    </div>
+    <p>R1 already had these from Session 3. Without the VLAN 30 route, R1 would hear PC-D, answer, and drop the answer: it has no default route until Session 11.</p>
+    <h3 class="sub">Check the relay on D1</h3>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">D1 · is the helper set?</span></div>
+      <div class="terminal-body"><span class="prompt">D1#</span> <span class="cmd">show ip interface vlan 10</span>
+<span class="out">Vlan10 is up, line protocol is up</span>
+<span class="out">  Internet address is 192.168.10.1/24</span>
+<span class="out">  Broadcast address is 255.255.255.255</span>
+<span class="out">  Address determined by setup command</span>
+<span class="out">  MTU is 1500 bytes</span>
+<span class="hl">  Helper address is 10.0.0.9</span>
+<span class="out">  ...</span></div>
+    </div>
+    <p>On real IOS, an SVI without a relay says <code>Helper address is not set</code>.</p>
+
+  </section>
+
+  <!-- DIRECT -->
+  <section id="direct">
+    <div class="section-head">
+      <p class="kicker">Module 7.2</p>
+      <h2>The direct case: R2 serves its own LAN</h2>
+      <p>No relay is needed when the server sits on the client's own subnet. R2's G0/0/1 is the gateway for the Shipping LAN, so its clients' broadcasts reach R2 directly.</p>
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">R2 · a pool for its own LAN</span></div>
+      <div class="terminal-body"><span class="prompt">R2#</span> <span class="cmd">configure terminal</span>
+<span class="prompt">R2(config)#</span> <span class="cmd">ip dhcp excluded-address 192.168.20.1 192.168.20.100</span>
+<span class="prompt">R2(config)#</span> <span class="cmd">ip dhcp pool SHIPPING-VLAN20</span>
+<span class="prompt">R2(dhcp-config)#</span> <span class="cmd">network 192.168.20.0 255.255.255.0</span>
+<span class="prompt">R2(dhcp-config)#</span> <span class="cmd">default-router 192.168.20.1</span>
+<span class="prompt">R2(dhcp-config)#</span> <span class="cmd">dns-server 192.168.20.100</span>
+<span class="prompt">R2(dhcp-config)#</span> <span class="cmd">domain-name it141.example</span>
+<span class="prompt">R2(dhcp-config)#</span> <span class="cmd">end</span>
+<span class="prompt">R2#</span> <span class="cmd">copy running-config startup-config</span></div>
+    </div>
+    <p>The excluded block protects R2's own <code>.1</code>, S3's management address <code>.2</code>, and SRV1 at <code>.100</code>.</p>
+    <table class="spec">
+      <thead><tr><th></th><th>HQ (VLANs 10, 30, 99)</th><th>Shipping (VLAN 20)</th></tr></thead>
+      <tbody>
+        <tr><td>Server</td><td>R1</td><td>R2</td></tr>
+        <tr><td>Is the server on the clients' subnet?</td><td><strong>No.</strong> R1 isn't in any HQ VLAN.</td><td><strong>Yes.</strong> R2 G0/0/1 <em>is</em> <code>192.168.20.1</code>.</td></tr>
+        <tr><td>Relay needed?</td><td><strong>Yes</strong>: <code>ip helper-address</code> on each D1 SVI</td><td><strong>No</strong>: the broadcast reaches R2 directly</td></tr>
+        <tr><td>How the server picks the pool</td><td>From the giaddr the relay wrote</td><td>From the address of the interface the broadcast arrived on</td></tr>
+        <tr><td>Route back needed?</td><td>Yes, to each giaddr</td><td>No: the clients are on a connected network</td></tr>
+      </tbody>
+    </table>
+    <p>Either way the server needs no interface command. A pool whose <code>network</code> matches the clients' subnet is enough.</p>
+
+  </section>
+
+  <!-- VERIFY -->
+  <section id="verify">
+    <div class="section-head">
+      <p class="kicker">Module 7.2</p>
+      <h2>Verify DHCPv4</h2>
+      <p>Check both ends: the client should have the right address, mask, gateway and DNS server, and the server should list the lease.</p>
+    </div>
+    <h3 class="sub">On the client</h3>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">PC-C · after switching to DHCP (IP Configuration → DHCP)</span></div>
+      <div class="terminal-body"><span class="prompt">C:\&gt;</span> <span class="cmd">ipconfig /all</span>
+
+<span class="out">FastEthernet0 Connection:(default port)</span>
+
+<span class="out">   Connection-specific DNS Suffix..: it141.example</span>
+<span class="out">   Physical Address................: 00E0.F70C.0011</span>
+<span class="out">   Link-local IPv6 Address.........: FE80::2E0:F7FF:FE0C:11</span>
+<span class="out">   IPv6 Address....................: 2001:DB8:ACAD:10:2E0:F7FF:FE0C:11</span>
+<span class="hl">   IPv4 Address....................: 192.168.10.101</span>
+<span class="out">   Subnet Mask.....................: 255.255.255.0</span>
+<span class="out">   Default Gateway.................: FE80::1</span>
+<span class="out">                                     192.168.10.1</span>
+<span class="hl">   DHCP Servers....................: 10.0.0.9</span>
+<span class="out">   DNS Servers.....................: ::</span>
+<span class="out">                                     192.168.20.100</span>
+<span class="out">...</span></div>
+    </div>
+    <table class="spec">
+      <thead><tr><th>Line</th><th>Where it came from</th></tr></thead>
+      <tbody>
+        <tr><td><code>DNS Suffix</code> it141.example</td><td>The pool's <code>domain-name</code></td></tr>
+        <tr><td><code>IPv4 Address</code> .101</td><td>The first free address after the excluded block</td></tr>
+        <tr><td><code>Subnet Mask</code></td><td>The pool's <code>network</code> line</td></tr>
+        <tr><td><code>Default Gateway</code> 192.168.10.1</td><td>The pool's <code>default-router</code>. FE80::1 above it comes from D1's IPv6 router advertisements, not DHCP.</td></tr>
+        <tr><td><code>DHCP Servers</code> 10.0.0.9</td><td><strong>R1</strong>, not D1, even though D1 relayed the request. PC-C sends its renewals there.</td></tr>
+        <tr><td><code>DNS Servers</code> 192.168.20.100</td><td>The pool's <code>dns-server</code></td></tr>
+      </tbody>
+    </table>
+    <p>PC-D's check is its mask: <code>255.255.255.192</code> proves the /26 pool answered. The MAC addresses on this page are made up, and the address each PC gets depends on the order the clients asked in.</p>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">PC-C · give the lease back, then ask again</span></div>
+      <div class="terminal-body"><span class="prompt">C:\&gt;</span> <span class="cmd">ipconfig /release</span>
+
+<span class="out">   IP Address......................: 0.0.0.0</span>
+<span class="out">   Subnet Mask.....................: 0.0.0.0</span>
+<span class="out">   Default Gateway.................: 0.0.0.0</span>
+<span class="out">   DNS Server......................: 0.0.0.0</span>
+
+<span class="prompt">C:\&gt;</span> <span class="cmd">ipconfig /renew</span>
+
+<span class="out">   IP Address......................: 192.168.10.101</span>
+<span class="out">   Subnet Mask.....................: 255.255.255.0</span>
+<span class="out">   Default Gateway.................: 192.168.10.1</span>
+<span class="out">   DNS Server......................: 192.168.20.100</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><code>/release</code> sends a DHCPRELEASE: the address goes back to the pool.</li>
+      <li><code>/renew</code> runs a fresh exchange, and usually gets the same address back, because it's still free.</li>
+      <li><strong>Changing a pool doesn't reach the clients.</strong> A client keeps its old gateway or DNS server until it renews. After fixing a pool, <code>ipconfig /renew</code>.</li>
+    </ul>
+    <h3 class="sub">On the server</h3>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">R1 · the leases it has handed out</span></div>
+      <div class="terminal-body"><span class="prompt">R1#</span> <span class="cmd">show ip dhcp binding</span>
+<span class="out">IP address       Client-ID/              Lease expiration        Type</span>
+<span class="out">                 Hardware address</span>
+<span class="out">192.168.10.101   00E0.F70C.0011           --                     Automatic</span>
+<span class="out">192.168.30.10    0090.2B5D.0030           --                     Automatic</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong>Match the MAC</strong> against the Physical Address in each PC's <code>ipconfig /all</code>.</li>
+      <li><code>Automatic</code> means leased from a pool. Packet Tracer shows <code>--</code> for the expiry; real switches and routers print a date and time.</li>
+      <li><strong>No VLAN 99 entry:</strong> nothing has asked there yet.</li>
+    </ul>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">R1 · the whole server configuration on one screen</span></div>
+      <div class="terminal-body"><span class="prompt">R1#</span> <span class="cmd">show running-config | section dhcp</span>
+<span class="out">ip dhcp excluded-address 192.168.10.1 192.168.10.100</span>
+<span class="out">ip dhcp excluded-address 192.168.30.1 192.168.30.9</span>
+<span class="out">ip dhcp excluded-address 192.168.99.1 192.168.99.100</span>
+<span class="out">ip dhcp pool HQ-VLAN10</span>
+<span class="out"> network 192.168.10.0 255.255.255.0</span>
+<span class="out"> default-router 192.168.10.1</span>
+<span class="out"> dns-server 192.168.20.100</span>
+<span class="out"> domain-name it141.example</span>
+<span class="out">ip dhcp pool HQ-VLAN30</span>
+<span class="out"> network 192.168.30.0 255.255.255.192</span>
+<span class="out">...</span></div>
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">R1 · message counters (counts made up for illustration)</span></div>
+      <div class="terminal-body"><span class="prompt">R1#</span> <span class="cmd">show ip dhcp server statistics</span>
+<span class="out">Address pools        3</span>
+<span class="out">Automatic bindings   2</span>
+<span class="out">...</span>
+<span class="out">Message              Received</span>
+<span class="out">DHCPDISCOVER         3</span>
+<span class="out">DHCPREQUEST          3</span>
+<span class="out">DHCPRELEASE          1</span>
+<span class="out">...</span>
+<span class="out">Message              Sent</span>
+<span class="out">DHCPOFFER            3</span>
+<span class="out">DHCPACK              3</span>
+<span class="out">DHCPNAK              0</span></div>
+    </div>
+    <p>The counters are a fault-finding tool: run the command, make a client ask, and run it again. If DHCPDISCOVER didn't go up, the request never reached R1. <a href="#troubleshoot">Troubleshoot</a> uses exactly that.</p>
+    <div class="teach-note preview">
+      <span class="label">Beyond the module: two more</span>
+      <code>show ip dhcp pool</code> shows each pool's size and how many addresses are leased (a /26 pool shows 62 addresses in total, a /24 shows 254, which makes a wrong mask obvious). <code>show ip dhcp conflict</code> lists addresses the server found already in use before it could lease them.
+    </div>
+
+  </section>
+
+  <!-- CLIENT -->
+  <section id="client">
+    <div class="section-head">
+      <p class="kicker">Module 7.3</p>
+      <h2>A router as a DHCPv4 client</h2>
+      <p>Routers usually have static addresses, but the interface facing an internet provider often doesn't: the provider leases it. A Cisco router interface, and the internet port of a home router, can both be DHCP clients.</p>
+    </div>
+    <h3 class="sub">A Cisco router interface</h3>
+    <p>One interface command, <code>ip address dhcp</code>, in place of a static address. The router then runs DORA on that link like any PC.</p>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">Scratch router · G0/0/0 leases an address from R2</span></div>
+      <div class="terminal-body"><span class="prompt">Router(config)#</span> <span class="cmd">interface g0/0/0</span>
+<span class="prompt">Router(config-if)#</span> <span class="hl">ip address dhcp</span>
+<span class="comment">! Router interfaces start shut. Without this, nothing is ever sent.</span>
+<span class="prompt">Router(config-if)#</span> <span class="cmd">no shutdown</span>
+<span class="prompt">Router(config-if)#</span> <span class="cmd">end</span>
+<span class="out">%DHCP-6-ADDRESS_ASSIGN: Interface GigabitEthernet0/0/0 assigned DHCP address 192.168.20.103, mask 255.255.255.0, hostname Router</span></div>
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">Scratch router · proof the address came from DHCP</span></div>
+      <div class="terminal-body"><span class="prompt">Router#</span> <span class="cmd">show ip interface brief</span>
+<span class="out">Interface              IP-Address      OK? Method Status                Protocol</span>
+<span class="hl">GigabitEthernet0/0/0   192.168.20.103  YES DHCP   up                    up</span>
+<span class="out">GigabitEthernet0/0/1   unassigned      YES unset  administratively down down</span>
+
+<span class="prompt">Router#</span> <span class="cmd">show ip interface g0/0/0</span>
+<span class="out">GigabitEthernet0/0/0 is up, line protocol is up</span>
+<span class="out">  Internet address is 192.168.20.103/24</span>
+<span class="out">  Broadcast address is 255.255.255.255</span>
+<span class="hl">  Address determined by DHCP</span>
+<span class="out">  ...</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong>The Method column says <code>DHCP</code></strong>, not <code>manual</code>.</li>
+      <li><strong>On real IOS, the router also takes a default route</strong> from the pool's <code>default-router</code>, with administrative distance 254, so any static default typed later wins. (Beyond Module 7; Session 11 explains administrative distance.)</li>
+      <li>In a real network this is the interface facing an internet provider. Here R2 plays the provider.</li>
+    </ul>
+    <h3 class="sub">A home router's internet port</h3>
+    <p>A home wireless router has two sides. Its <strong>internet</strong> port is a DHCP <em>client</em>: home routers ship set to lease an address from whatever they're plugged into, so a customer can connect one to a modem and go. Its <strong>LAN</strong> side is a DHCP <em>server</em> for the home, handing out <code>192.168.0.x</code> behind NAT. The two ranges never mix.</p>
+    <p>In Packet Tracer the setting is in the router's <strong>GUI</strong> tab, under <strong>Setup → Basic Setup → Internet Setup</strong>: <em>Automatic Configuration - DHCP</em>. The <strong>Status</strong> page should show the address it leased. Menu names can differ slightly between Packet Tracer versions. The home router is on S3 F0/3 at the Shipping site, so R2 is its provider.</p>
+    <div class="teach-note warn">
+      <span class="label">One cable, two very different devices</span>
+      Plugged in by its <strong>internet</strong> port, the home router is a well-behaved client of R2. Plugged in by a <strong>LAN</strong> port, its own DHCP server starts answering the Shipping LAN, and PC-B could end up with a <code>192.168.0.x</code> address. That's a rogue DHCP server, and stopping one is Session 9's job.
+    </div>
+
+  </section>
+
+  <!-- TROUBLESHOOT -->
+  <section id="troubleshoot">
+    <div class="section-head">
+      <p class="kicker">Module 7</p>
+      <h2>Troubleshoot DHCPv4</h2>
+      <p>Start at the client. A <code>169.254</code> address means nothing answered; a real address with wrong settings means a server answered, and the fault is in what its pool hands out.</p>
+    </div>
+    <table class="spec">
+      <thead><tr><th>Fault</th><th>Symptom on the client</th><th>The command that shows it</th><th>Fix</th></tr></thead>
+      <tbody>
+        <tr><td><strong>1 · No helper on one SVI</strong> (Vlan30)</td><td>PC-D: 169.254. PC-C in VLAN 10 is fine.</td><td>D1 <code>show ip interface vlan 30</code>: <code>Helper address is not set</code></td><td><code>ip helper-address 10.0.0.9</code> on Vlan30</td></tr>
+        <tr><td><strong>2 · Helper on the wrong interface</strong> (G1/0/24)</td><td>Every HQ PC: 169.254</td><td>D1 <code>show running-config interface g1/0/24</code>: the helper is there, and the SVIs have none</td><td>Move it to each SVI</td></tr>
+        <tr><td><strong>3 · Helper at the wrong address</strong> (<code>10.0.0.10</code>, D1's own end)</td><td>That VLAN: 169.254</td><td>D1 <code>show ip interface vlan 10</code>; R1's DHCPDISCOVER counter doesn't move</td><td><code>no ip helper-address 10.0.0.10</code>, then the right one. A second helper line adds; it doesn't replace.</td></tr>
+        <tr><td><strong>4 · Pool doesn't match the subnet</strong> (<code>network 192.168.31.0 …</code>)</td><td>PC-D: 169.254</td><td>R1 <code>show running-config | section dhcp</code>; statistics: DISCOVER goes up, OFFER doesn't</td><td>Correct the <code>network</code> line</td></tr>
+        <tr><td><strong>5 · No route back to the giaddr</strong> (R1 missing its VLAN 30 route)</td><td>PC-D: 169.254</td><td>R1 <code>show ip route</code>: no 192.168.30.0; statistics: DISCOVER and OFFER both go up</td><td>Put the route back. The server replies to the giaddr, so it needs a route to it.</td></tr>
+        <tr><td><strong>6 · <code>no service dhcp</code></strong> on R1, or on D1</td><td>Every HQ PC: 169.254</td><td><code>show running-config | include service dhcp</code> shows a <code>no service dhcp</code> line (a healthy device shows nothing)</td><td><code>service dhcp</code>. On IOS it switches off the relay too, not just the server.</td></tr>
+        <tr><td><strong>7 · Wrong mask in the pool</strong> (VLAN 30 as /24)</td><td>PC-D gets an address with mask <code>255.255.255.0</code>, and works, for now</td><td><code>ipconfig</code>: the mask. Later clients get <code>.63</code>, VLAN 30's broadcast address, and then <code>.64</code> and up, outside the /26.</td><td>Fix the <code>network</code> line, then <code>ipconfig /renew</code></td></tr>
+        <tr><td><strong>8 · Wrong <code>default-router</code></strong> (<code>10.0.0.9</code>, or another VLAN's .1)</td><td>The PC gets an address and reaches its own subnet only</td><td><code>ipconfig</code>: the gateway isn't its VLAN's .1</td><td>Fix the pool, then <code>ipconfig /renew</code> on each client</td></tr>
+        <tr><td><strong>9 · A static device inside the leased range</strong></td><td>On real IOS, usually nothing visible: the server pings before offering and skips the address. If Packet Tracer doesn't check, two devices end up with the same address.</td><td>R1 <code>show ip dhcp conflict</code> (beyond the module)</td><td>Move the static device into the excluded block</td></tr>
+        <tr><td><strong>10 · Client port in the wrong VLAN</strong></td><td>That client: 169.254, or an address from the wrong VLAN's pool</td><td>The switch's <code>show vlan brief</code></td><td><code>switchport access vlan</code> …</td></tr>
+      </tbody>
+    </table>
+    <h3 class="sub">The method: follow the request</h3>
+    <p>A 169.254 address says only that no offer came back. Walk the path in the order the request travels:</p>
+    <ol>
+      <li><strong>Client:</strong> is it set to DHCP, and is its switch port in the right VLAN?</li>
+      <li><strong>Relay (HQ only):</strong> does that VLAN's SVI have the right helper?</li>
+      <li><strong>Did the server hear it?</strong> R1's DHCPDISCOVER counter, before and after an <code>ipconfig /renew</code>. If it didn't move, go back to the relay.</li>
+      <li><strong>Did the server answer?</strong> If DISCOVER moved but OFFER didn't, look at the pools.</li>
+      <li><strong>Did the answer get back?</strong> If OFFER moved and the client still has nothing, check R1's route to the giaddr.</li>
+      <li><strong>Address, but stuck in its own subnet?</strong> Then it's the options (gateway, mask), not the lease.</li>
+    </ol>
+    <p>If Packet Tracer's counters don't move, use Simulation mode with the DHCP filter instead: you can see which leg the request stops on.</p>
+
+  </section>
+
+  <!-- LAB -->
+  <section id="lab">
+    <div class="section-head">
+      <p class="kicker">Hands-On · Packet Tracer</p>
+      <h2>Lab: New Hire Day</h2>
+      <p>Today's file starts from the end of Session 5, with two additions at the Shipping site: the home router, cabled by its internet port to S3 F0/3, and a spare ISR4321 on S3 F0/4. Every host is still static, and there's no DHCP configuration anywhere. The configuration is in the sections above; this is the order to do it in.</p>
+    </div>
+    <ol>
+      <li><strong>Watch the problem first (instructor demo).</strong> In Simulation mode with the DHCP filter, PC-C asks for an address before any relay exists. The DISCOVER floods VLAN 10 and stops at D1.</li>
+      <li><strong>R1: the exclusions, then the three pools</strong> (<a href="#server">Configure a server</a>). <code>show ip dhcp binding</code> is still empty, and that's expected.</li>
+      <li><strong>D1: a helper on Vlan10, Vlan30 and Vlan99</strong> (<a href="#relay">Relay</a>). Check with <code>show ip interface vlan 10</code>. Instructor: run the Simulation-mode demo again. This time D1 sends the DISCOVER on to R1 as one unicast, with the giaddr in the PDU details.</li>
+      <li><strong>PC-C and PC-D to DHCP</strong> (Desktop → IP Configuration → DHCP). Check each with <code>ipconfig /all</code>, then try <code>ipconfig /release</code> and <code>/renew</code> on PC-C (<a href="#verify">Verify</a>). PC-A stays static all term.</li>
+      <li><strong>R2: its own pool</strong> (<a href="#direct">R2's own pool</a>). Then check the home router: its GUI tab's Status page should show a <code>192.168.20.x</code> address it leased without anyone touching it (<a href="#client">Routers as clients</a>). If it's still blank, click Save Settings on its Basic Setup page to make it ask again. Then move PC-B to DHCP. The order decides the addresses, so yours may differ from the page by one.</li>
+      <li><strong>Verify on both servers:</strong> <code>show ip dhcp binding</code>, <code>show running-config | section dhcp</code>, and <code>show ip dhcp server statistics</code> on R1 and R2.</li>
+      <li><strong>Optional: a router as a client.</strong> On the spare ISR4321, <code>ip address dhcp</code> and <code>no shutdown</code> on G0/0/0, and check <code>show ip interface brief</code>. Then <code>clear ip dhcp binding</code> with its address on R2, and delete the spare router.</li>
+      <li><strong>Test</strong> every row of <a href="#reach">What works now</a>.</li>
+    </ol>
+    <div class="teach-note">
+      <span class="label">Homework: the same pools on router-on-a-stick</span>
+      Open your Session 3 Part A file, where R1's subinterfaces are the gateways, and add the VLAN 10 and VLAN 30 exclusions and pools to R1. Then answer: why did D1 need <code>ip helper-address</code> today, when R1 in that file doesn't? <em>(In Part A, R1 is on every VLAN, so every DISCOVER reaches it directly. The server has to be on the clients' subnet, or someone has to relay.)</em>
+    </div>
+  </section>
+
+
+  <!-- MISTAKES -->
+  <section id="mistakes">
+    <div class="section-head">
+      <p class="kicker">Watch for this</p>
+      <h2>Common Module 7 mistakes</h2>
+      <p>Most DHCP faults are a missing relay, a pool that disagrees with the subnet, or an exclusion that leaves out the wrong addresses.</p>
+    </div>
+    <h3 class="sub">1 · The helper on the wrong interface</h3>
+    <p>On D1's link to R1 instead of the SVIs. The helper goes where the clients' broadcasts arrive.</p>
+    <h3 class="sub">2 · The gateway is the server</h3>
+    <p><code>default-router 10.0.0.9</code>. The default router is the gateway the <em>client</em> uses, D1's SVI for that VLAN. The server's address has nothing to do with it.</p>
+    <h3 class="sub">3 · The /26 typed as a /24</h3>
+    <p>VLAN 30's pool with <code>255.255.255.0</code>. PC-D works today, and later clients get addresses outside its subnet. Check the mask in <code>ipconfig</code>.</p>
+    <h3 class="sub">4 · Exclusions after the pool</h3>
+    <p>If a client asks between the pool and the exclusion, it can be handed a static device's address. Exclude first.</p>
+    <h3 class="sub">5 · Forgetting to renew</h3>
+    <p>A fixed pool doesn't reach clients that already have a lease. <code>ipconfig /renew</code> after every pool change.</p>
+    <h3 class="sub">6 · Reading 169.254 as "the network is down"</h3>
+    <p>It only means no DHCP offer came back. Ping the gateway from a static host: if that works, the problem is DHCP.</p>
+
+  </section>
+
+  <!-- WHAT WORKS NOW -->
+  <section id="reach">
+    <div class="section-head">
+      <p class="kicker">End of session</p>
+      <h2>What works now, and what doesn't</h2>
+      <p>The routing and switching haven't changed. What's new is that most hosts now configure themselves.</p>
+    </div>
+    <table class="spec">
+      <thead><tr><th>Test</th><th>Result</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Everything that worked at the end of Session 5</td><td><strong>Works</strong></td><td>No routing or switching change today</td></tr>
+        <tr><td>A new PC on an HQ VLAN 10 or 30 port, set to DHCP</td><td><strong>Gets a full configuration</strong></td><td>R1's pools, through D1's relay</td></tr>
+        <tr><td>A new PC on S3 (VLAN 20), set to DHCP</td><td>Gets a full configuration</td><td>R2, directly</td></tr>
+        <tr><td>PC-B, PC-C and PC-D → <code>www.it141.example</code></td><td>Works</td><td>The DNS server came from DHCP</td></tr>
+        <tr><td>HQ DHCP if the R1–R2 link fails</td><td><strong>Still works</strong></td><td>The helper points at <code>10.0.0.9</code>, not <code>10.0.0.1</code></td></tr>
+        <tr><td>HQ DHCP if D1 fails</td><td>No</td><td>D1 is both the relay and the gateway. That's Session 7's problem.</td></tr>
+        <tr><td>VLAN 99 DHCP</td><td>Ready, with no clients</td><td>The access point arrives in Session 10</td></tr>
+        <tr><td>IPv6 addresses from DHCP</td><td>No</td><td>Module 8, Session 7</td></tr>
+        <tr><td>Protection against a rogue DHCP server</td><td><strong>None</strong></td><td>Session 9: DHCP snooping</td></tr>
+      </tbody>
+    </table>
+
+    <div class="teach-note preview">
+      <span class="label">Coming up in Session 7</span>
+      IPv6 hosts have been configuring themselves since Session 3, with SLAAC. Module 8 shows how, and how a router's announcements tell a host whether to use SLAAC, DHCPv6, or both. Module 9 then asks what happens to every gateway at HQ if the router behind it dies.
+    </div>
+  </section>
+
+  <!-- THE TICKET -->
+  <section id="ticket">
+    <div class="section-head">
+      <p class="kicker">Recurring segment</p>
+      <h2>The Ticket</h2>
+      <p>Turn it into steps before you open Packet Tracer.</p>
+    </div>
+    <div class="ticket-card">
+      <p class="tag">Ticket #141-06 · Priority: high · From: Logistics</p>
+      <p>The new hire at the Logistics desk can't get onto anything. Their PC says something about "APIPA". The Front Desk new hire, who started the same day, is fine. We didn't change anything.</p>
+    </div>
+    <details class="solution"><summary>One way to break it down</summary><div class="solbody">
+      <ol>
+        <li><strong>"APIPA"</strong> means a 169.254 address: no DHCP offer reached the PC. The network itself may be fine.</li>
+        <li><strong>Front Desk works, Logistics doesn't.</strong> Same server, different VLAN. So R1's pools in general are fine, and the fault is something VLAN 30 has on its own: its access port, its relay, its pool, or R1's route back to it.</li>
+        <li>Check the PC first: set to DHCP? Then its port: <code>show vlan brief</code> on S2, Fa0/11 should be in VLAN 30.</li>
+        <li>Check the relay: <code>show ip interface vlan 30</code> on D1 should show <code>Helper address is 10.0.0.9</code>.</li>
+        <li>Check the server heard it: <code>show ip dhcp server statistics</code> on R1 before and after <code>ipconfig /renew</code> on the PC. DISCOVER up but OFFER not: the VLAN 30 pool (<code>show running-config | section dhcp</code>). Both up: R1's route to <code>192.168.30.0/26</code>.</li>
+        <li>Verify: the PC gets <code>192.168.30.x</code> with mask <code>255.255.255.192</code> and gateway <code>192.168.30.1</code>, then reaches <code>www.it141.example</code>.</li>
+      </ol>
+    </div></details>
+
+  </section>
+
+  <!-- CHECKPOINT -->
+  <section id="checkpoint">
+    <div class="section-head">
+      <p class="kicker">Before Session 7</p>
+      <h2>Checkpoint: Module 7</h2>
+      <p>If you can do these cold, you're ready for SLAAC and DHCPv6.</p>
+    </div>
+    <ul class="obj-list">
+      <li>The four DORA messages in order, which are broadcasts, and why the request is a broadcast</li>
+      <li>T1 and T2: when a client renews, and to whom</li>
+      <li>A DHCPv4 server from memory: <code>ip dhcp excluded-address</code>, <code>ip dhcp pool</code>, <code>network</code>, <code>default-router</code>, <code>dns-server</code>, <code>domain-name</code></li>
+      <li>Why a relay is needed, where <code>ip helper-address</code> goes, and how the server picks the right pool</li>
+      <li><code>show ip dhcp binding</code>, <code>ipconfig /all</code>, <code>ipconfig /release</code> and <code>/renew</code></li>
+      <li><code>ip address dhcp</code> on a router interface, and what a home router's internet port does</li>
+      <li>What a 169.254 address tells you, and the first three things to check</li>
+    </ul>
+  </section>
+
+  <!-- FLASHCARDS -->
+  <section id="flashcards">
+    <div class="section-head">
+      <p class="kicker">Study</p>
+      <h2>Flashcards</h2>
+      <p>Click to flip. Double-click to mark as known.</p>
+    </div>
+    <div class="toolbar">
+      <button class="btn" id="shuffleBtn">Shuffle</button>
+      <button class="btn" id="resetKnownBtn">Reset progress</button>
+      <span id="cardProgress"></span>
+    </div>
+    <div class="card-grid" id="cardGrid"></div>
+  </section>
+
+  <!-- QUIZ -->
+  <section id="quiz">
+    <div class="section-head">
+      <p class="kicker">Check yourself</p>
+      <h2>Sample questions</h2>
+      <p>Pick an answer to see if you're right. Same style as the module-group exam.</p>
+    </div>
+    <div id="quizScore"></div>
+    <div id="quizList"></div>
+    <button class="btn" id="resetQuizBtn">Reset quiz</button>
+  </section>
+
+  <!-- EXAMPLES -->
+  <section id="examples">
+    <div class="section-head">
+      <p class="kicker">Applied</p>
+      <h2>Worked examples</h2>
+      <p>Think it through before you expand the answer.</p>
+    </div>
+    <div class="example">
+      <span class="tag">Broadcasts</span>
+      <h3>Which DORA messages are broadcasts?</h3>
+      <p>A client has held 192.168.10.101 for 12 hours of its one-day lease, and has been running the whole time. Which message does it send now, and is it a broadcast? Which messages are broadcasts in a brand-new exchange?</p>
+      <details class="solution"><summary>Show answer</summary><div class="solbody">
+        <p>Twelve hours is half the lease, which is T1, so it renews with a <strong>unicast</strong> DHCPREQUEST straight to the server. Only a client with no address (or one whose renewals all failed) starts over with a <strong>broadcast</strong> DHCPDISCOVER. In a brand-new exchange, the DISCOVER and the REQUEST are the broadcasts.</p>
+      </div></details>
+    </div>
+    <div class="example">
+      <span class="tag">Relay</span>
+      <h3>Which pool?</h3>
+      <p>PC-D in VLAN 30 asks for an address. D1 relays it to R1, which has pools for VLANs 10, 30 and 99. How does R1 know to use the VLAN 30 pool?</p>
+      <details class="solution"><summary>Show answer</summary><div class="solbody">
+        <p>From the <strong>giaddr</strong>. D1 relayed the request from its Vlan30 SVI, so it wrote <code>192.168.30.1</code> in the giaddr field. That address is inside the HQ-VLAN30 pool's network, <code>192.168.30.0/26</code>, so R1 offers a VLAN 30 address, and sends the offer back to <code>192.168.30.1</code>.</p>
+      </div></details>
+    </div>
+    <div class="example">
+      <span class="tag">Counting</span>
+      <h3>How many leases?</h3>
+      <p>How many addresses can R1 lease in VLAN 30, and why isn't it 62?</p>
+      <details class="solution"><summary>Show answer</summary><div class="solbody">
+        <p>The /26 has 62 usable addresses, <code>.1</code> to <code>.62</code>. <code>.1</code>–<code>.9</code> are excluded, which leaves <code>.10</code> to <code>.62</code>: <strong>53 addresses</strong>. That's enough for CCNA 1's "LAN-C, 50 users".</p>
+      </div></details>
+    </div>
+    <div class="example">
+      <span class="tag">Exclusions</span>
+      <h3>Why didn't PC-D keep .9?</h3>
+      <p>PC-D had the static address 192.168.30.9. After moving to DHCP it got 192.168.30.10. Why not .9 again?</p>
+      <details class="solution"><summary>Show answer</summary><div class="solbody">
+        <p><code>.9</code> is inside the excluded range, <code>.1</code>–<code>.9</code>, so the server will never lease it. The first address it can lease is <code>.10</code>. The rule works both ways: static devices live in the excluded block, and leased ones never land there.</p>
+      </div></details>
+    </div>
+    <div class="example">
+      <span class="tag">Direct vs relay</span>
+      <h3>Why no helper at R2?</h3>
+      <p>PC-B gets its address from R2 with no <code>ip helper-address</code> anywhere. Why does HQ need one and Shipping doesn't?</p>
+      <details class="solution"><summary>Show answer</summary><div class="solbody">
+        <p>R2's G0/0/1 is <code>192.168.20.1</code>, on PC-B's own subnet, so PC-B's broadcast reaches R2 directly. R1 isn't on any HQ VLAN: the broadcasts stop at D1, so D1 has to relay them.</p>
+      </div></details>
+    </div>
+
+  </section>
+
+  <!-- GLOSSARY -->
+  <section id="glossary">
+    <div class="section-head">
+      <p class="kicker">Reference</p>
+      <h2>Glossary &amp; index</h2>
+      <p>Every term from this session. Search, or jump by letter.</p>
+    </div>
+    <input type="text" id="glossarySearch" placeholder="Search terms…" aria-label="Search glossary">
+    <div class="alpha-nav" id="alphaNav"></div>
+    <dl class="glossary" id="glossaryList"></dl>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>IT141 · CCNA: Switching, Routing, and Wireless Essentials · Session 6 reference.</p>
+    <p class="license-note">© 2026 Zan Dick (<a href="https://github.com/KevinSays/osi-company-switching">KevinSays</a>), Mountwest Community &amp; Technical College · Content: <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/">CC BY-NC-SA 4.0</a> · Code: <a href="https://github.com/KevinSays/osi-company-switching/blob/main/LICENSE">MIT</a> · Cisco, NetAcad, CCNA and Packet Tracer are trademarks of Cisco; this site is not affiliated with or endorsed by Cisco.</p>
+  </div>
+</footer>
+<button id="backToTop" class="back-to-top" aria-label="Back to top" title="Back to top">↑</button>
+<script>
+  const TERMS = [
+    {t:"APIPA", d:"Automatic Private IP Addressing: the 169.254.0.0/16 address a Windows client gives itself when no DHCP server answers. It means DHCP failed."},
+    {t:"default-router", d:"DHCP pool command that sets the default gateway handed to clients. It must be an address in the pool's own subnet."},
+    {t:"DHCPACK", d:"The server's confirmation that a lease is granted. After it, the client uses the address."},
+    {t:"DHCPDISCOVER", d:"A client's first message, broadcast from 0.0.0.0 to 255.255.255.255: is there a DHCP server out there?"},
+    {t:"DHCPNAK", d:"A server's refusal of a DHCPREQUEST, for example when the requested address is no longer available. The client starts over."},
+    {t:"DHCPOFFER", d:"A server's offer of an address, mask, gateway, DNS server and lease time. The server reserves the address while it waits."},
+    {t:"DHCPREQUEST", d:"A client's acceptance of one offer. Broadcast the first time, so other servers can withdraw theirs; unicast to the server when renewing at T1."},
+    {t:"DHCPv4", d:"Dynamic Host Configuration Protocol for IPv4: leases hosts an address, mask, gateway, DNS servers and more. Servers use UDP 67, clients UDP 68."},
+    {t:"dns-server", d:"DHCP pool command that sets the DNS server address (up to eight) handed to clients."},
+    {t:"domain-name", d:"DHCP pool command that sets the DNS domain name handed to clients, such as it141.example."},
+    {t:"DORA", d:"Shorthand for the four messages of a new DHCPv4 lease: Discover, Offer, Request, Acknowledge."},
+    {t:"giaddr", d:"Gateway IP address: the field a relay agent fills in with the address of the interface the request arrived on. The server uses it to pick the pool, and sends its reply back to it."},
+    {t:"ip address dhcp", d:"Interface command that makes a router interface a DHCPv4 client: it leases its address from a DHCP server on that link."},
+    {t:"ip dhcp excluded-address", d:"Global command listing addresses a DHCP server must never lease (gateways, servers, printers). Takes a single address or a low and high address."},
+    {t:"ip dhcp pool", d:"Global command that creates a named DHCP pool and enters DHCP configuration mode, where network, default-router and the other options are set."},
+    {t:"ip helper-address", d:"Interface command that makes the interface a relay agent: broadcasts for DHCP (and some other UDP services) arriving there are forwarded as unicasts to the address given."},
+    {t:"ipconfig /release, /renew", d:"Windows commands that give back the current DHCP lease and request a new one. The quickest way to test DHCP from a PC."},
+    {t:"Lease", d:"The time a client may use a DHCP address. One day by default on a Cisco server. Clients renew at 50% (T1) and, failing that, at 87.5% (T2)."},
+    {t:"lease (pool command)", d:"DHCP pool command that sets the lease time in days, hours and minutes, or infinite."},
+    {t:"network (DHCP pool)", d:"DHCP pool command that sets the subnet the pool leases from, with a mask or prefix length. It must match the subnet the clients are on."},
+    {t:"Relay agent", d:"A router or Layer 3 switch interface that receives DHCP broadcasts from clients and forwards them as unicasts to a server on another subnet. Configured with ip helper-address."},
+    {t:"service dhcp", d:"Global command that turns the IOS DHCP server and relay on. It's on by default; no service dhcp turns both off."},
+    {t:"show ip dhcp binding", d:"Lists every address the server has leased, with the client's ID or MAC and the lease expiry."},
+    {t:"show ip dhcp pool", d:"Shows each pool: its subnet, how many addresses are leased, and the next address it will hand out."},
+    {t:"show ip dhcp server statistics", d:"Counts the DHCP messages the server has received and sent, by type: a quick way to see whether discovers are arriving at all."},
+    {t:"T1 / T2", d:"The renewal timers: at T1 (50% of the lease) a client unicasts a renewal to its server; at T2 (87.5%) it broadcasts to any server."},
+  ];
+  const QUIZ = [
+    { q:"Which DHCPv4 message does a client broadcast first, to find a server?",
+      choices:["DHCPREQUEST", "DHCPOFFER", "DHCPDISCOVER", "DHCPACK"], correct:2,
+      explain:"With no address and no idea where a server is, the client broadcasts a DHCPDISCOVER from 0.0.0.0 to 255.255.255.255." },
+    { q:"Why is a client's first DHCPREQUEST a broadcast?",
+      choices:["It doesn't know the server's address", "So every server that made an offer learns which one was accepted", "Routers only forward broadcasts", "It's asking for a new gateway"], correct:1,
+      explain:"The client knows the chosen server from its offer. Broadcasting the request also tells any other server that its offer was declined." },
+    { q:"At what point in the lease does a client first try to renew with its own server?",
+      choices:["25%", "50%", "87.5%", "When it expires"], correct:1,
+      explain:"At T1, 50% of the lease, it sends a unicast DHCPREQUEST to the server that gave it the lease. At T2, 87.5%, it broadcasts to any server." },
+    { q:"Which command stops a Cisco DHCP server from leasing 192.168.10.1 to 192.168.10.100?",
+      choices:["ip dhcp excluded-address 192.168.10.1 192.168.10.100", "network 192.168.10.101 255.255.255.0", "ip dhcp pool exclude 1-100", "no ip dhcp 192.168.10.1 192.168.10.100"], correct:0,
+      explain:"Exclusions are global configuration commands, outside any pool, with a low and a high address." },
+    { q:"In a DHCP pool, what does the default-router command set?",
+      choices:["The DHCP server's own address", "The gateway address handed to clients", "The router the relay forwards to", "The pool's network address"], correct:1,
+      explain:"default-router is the gateway the clients will use. At HQ that's D1's SVI for each VLAN, not R1." },
+    { q:"A DHCP server is on another subnet from its clients. What must the router or Layer 3 switch on the clients' subnet have?",
+      choices:["ip address dhcp on the client-facing interface", "ip helper-address on the interface where the clients' broadcasts arrive", "A second DHCP pool", "service dhcp disabled"], correct:1,
+      explain:"The relay goes on the interface the broadcasts arrive on, pointing at the server's address." },
+    { q:"How does a DHCP server choose which pool to use for a relayed request?",
+      choices:["From the client's MAC address", "From the giaddr the relay agent wrote into the message", "From the order of the pools in the config", "From the helper address"], correct:1,
+      explain:"The relay writes the address of its client-facing interface into giaddr. The server uses the pool whose network contains it, and replies to that address." },
+    { q:"A Windows PC set to DHCP shows 192.168.30.10 with mask 255.255.255.0, but VLAN 30 is a /26. What's wrong?",
+      choices:["The PC's NIC", "The pool's network command uses the wrong mask", "The helper address", "The DNS server"], correct:1,
+      explain:"The client got the mask from the pool's network line. Fix it to 255.255.255.192, then renew the client." },
+    { q:"A PC set to DHCP has the address 169.254.17.4. What does that tell you?",
+      choices:["The DHCP server leased it an APIPA address", "No DHCP offer reached the PC", "The PC has a static address", "The lease has been renewed"], correct:1,
+      explain:"169.254.0.0/16 is APIPA: the PC gave itself an address because no DHCP server answered." },
+    { q:"Which interface command makes a router interface a DHCPv4 client?",
+      choices:["ip dhcp client", "ip address dhcp", "ip helper-address", "dhcp enable"], correct:1,
+      explain:"ip address dhcp, plus no shutdown, makes the interface lease its address from a server on that link." },
+    { q:"Which command shows the addresses a Cisco DHCP server has leased?",
+      choices:["show ip dhcp binding", "show ip dhcp pool", "show dhcp lease", "show ip interface brief"], correct:0,
+      explain:"show ip dhcp binding lists each leased address with the client's MAC or ID and the lease expiry." },
+    { q:"Which Windows command gives back a DHCP lease?",
+      choices:["ipconfig /renew", "ipconfig /flushdns", "ipconfig /release", "ipconfig /all"], correct:2,
+      explain:"ipconfig /release sends a DHCPRELEASE. ipconfig /renew then asks for a new lease." },
+  ];
+</script>
