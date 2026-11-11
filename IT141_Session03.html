@@ -33,7 +33,6 @@
     <a href="#whichdoor">Which Door?</a>
     <a href="#troubleshoot">Troubleshoot</a>
     <a href="#faulthunt">Fault Hunt</a>
-    <a href="#lab">Lab</a>
     <a href="#reach">What Works Now</a>
     <a href="#ticket">The Ticket</a>
     <a href="#checkpoint">Checkpoint</a>
@@ -67,7 +66,7 @@
     </ul>
     <div class="teach-note">
       <span class="label">Topology used on this page</span>
-      HQ as Session 2 left it: VLANs 10, 30, 99 and 900 on S1 and S2, joined by the F0/23 trunk. The page routes between those VLANs twice. First <strong>R1</strong> does it with router-on-a-stick on <strong>G0/0/1</strong>, through a trunk on <strong>S1 G0/1</strong>. Then <strong>D1</strong>, a Catalyst 3650 Layer 3 switch, takes over. R1 G0/0/1 links to <strong>D1 G1/0/24</strong> on <code>10.0.0.8/30</code> (R1 <code>.9</code>, D1 <code>.10</code>), and S1 G0/1 is trunked to <strong>D1 G1/0/1</strong>. PC-C and PC-D get their IPv6 addresses automatically. The <a href="#lab">lab</a> at the end covers the two Packet Tracer files.
+      HQ as Session 2 left it: VLANs 10, 30, 99 and 900 on S1 and S2, joined by the F0/23 trunk. The page routes between those VLANs twice. First <strong>R1</strong> does it with router-on-a-stick on <strong>G0/0/1</strong>, through a trunk on <strong>S1 G0/1</strong>. Then <strong>D1</strong>, a Catalyst 3650 Layer 3 switch, takes over. R1 G0/0/1 links to <strong>D1 G1/0/24</strong> on <code>10.0.0.8/30</code> (R1 <code>.9</code>, D1 <code>.10</code>), and S1 G0/1 is trunked to <strong>D1 G1/0/1</strong>. PC-C and PC-D get their IPv6 addresses automatically.
     </div>
     <table class="spec">
       <thead><tr><th>VLAN</th><th>Gateway</th><th>Router-on-a-stick: who answers</th><th>Layer 3 switch: who answers</th></tr></thead>
@@ -539,7 +538,56 @@
       <li><strong>SVIs need <code>no shutdown</code>.</strong> Unlike R1's subinterfaces, an SVI starts administratively down.</li>
       <li><strong>D1 has no access ports in VLANs 10, 30 or 99.</strong> Each SVI stays up only because the G1/0/1 trunk carries its VLAN. If the trunk drops, or a VLAN leaves its allowed list, that SVI goes up/down.</li>
     </ul>
-    <p><strong>D1 and R1 also need routes</strong> to each other's networks: R1 to the HQ subnets behind D1, and D1 to everything outside HQ. Those are static routes, which are Module 15. The lab provides them.</p>
+    <h3 class="sub" id="swap">Moving the gateways from R1 to D1</h3>
+    <p>When D1 takes over, R1 gives up its subinterfaces first, and D1 builds its SVIs second. The reason is R1's routing table. While R1 still has <code>.10</code>, <code>.30</code> and <code>.99</code> subinterfaces, it lists the HQ subnets as <strong>directly connected</strong>, and a connected route always beats the static routes that point at D1. R1's link to D1 becomes a plain routed port on a new <code>/30</code>:</p>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">R1 · remove the subinterfaces, readdress G0/0/1</span></div>
+      <div class="terminal-body"><span class="prompt">R1#</span> <span class="cmd">configure terminal</span>
+<span class="prompt">R1(config)#</span> <span class="hl">no interface g0/0/1.10</span>
+<span class="prompt">R1(config)#</span> <span class="cmd">no interface g0/0/1.30</span>
+<span class="prompt">R1(config)#</span> <span class="cmd">no interface g0/0/1.99</span>
+<span class="prompt">R1(config)#</span> <span class="cmd">no interface g0/0/1.900</span>
+<span class="comment">!</span>
+<span class="prompt">R1(config)#</span> <span class="cmd">interface g0/0/1</span>
+<span class="prompt">R1(config-if)#</span> <span class="cmd">description Routed link to D1 G1/0/24</span>
+<span class="prompt">R1(config-if)#</span> <span class="hl">ip address 10.0.0.9 255.255.255.252</span>
+<span class="prompt">R1(config-if)#</span> <span class="cmd">ipv6 address fe80::1 link-local</span>
+<span class="prompt">R1(config-if)#</span> <span class="cmd">ipv6 address 2001:db8:acad:ff03::1/64</span>
+<span class="prompt">R1(config-if)#</span> <span class="cmd">no shutdown</span>
+<span class="prompt">R1(config-if)#</span> <span class="cmd">end</span></div>
+    </div>
+    <p>On real routers, a deleted subinterface may linger in <code>show ip interface brief</code> as <code>deleted</code> until the next reload. Its configuration is gone.</p>
+    <div class="teach-note preview">
+      <span class="label">Beyond Module 4: static routes</span>
+      R1 and D1 also need routes to each other's networks: R1 to the HQ subnets behind D1, and D1 to everything outside HQ. Those are static routes, which are Module 15 (Session 11). Here they're provided.
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">R1 · the HQ networks are behind D1</span></div>
+      <div class="terminal-body"><span class="prompt">R1#</span> <span class="cmd">configure terminal</span>
+<span class="prompt">R1(config)#</span> <span class="cmd">ip route 192.168.10.0 255.255.255.0 10.0.0.10</span>
+<span class="comment">!</span>
+<span class="comment">! The /26 mask, not /24.</span>
+<span class="prompt">R1(config)#</span> <span class="cmd">ip route 192.168.30.0 255.255.255.192 10.0.0.10</span>
+<span class="prompt">R1(config)#</span> <span class="cmd">ip route 192.168.99.0 255.255.255.0 10.0.0.10</span>
+<span class="prompt">R1(config)#</span> <span class="cmd">ipv6 route 2001:db8:acad:10::/64 2001:db8:acad:ff03::2</span>
+<span class="prompt">R1(config)#</span> <span class="cmd">ipv6 route 2001:db8:acad:30::/64 2001:db8:acad:ff03::2</span>
+<span class="prompt">R1(config)#</span> <span class="cmd">ipv6 route 2001:db8:acad:99::/64 2001:db8:acad:ff03::2</span>
+<span class="prompt">R1(config)#</span> <span class="cmd">end</span>
+<span class="prompt">R1#</span> <span class="cmd">copy running-config startup-config</span></div>
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">D1 · everything else is through R1</span></div>
+      <div class="terminal-body"><span class="prompt">D1#</span> <span class="cmd">configure terminal</span>
+<span class="prompt">D1(config)#</span> <span class="cmd">ip route 0.0.0.0 0.0.0.0 10.0.0.9</span>
+<span class="prompt">D1(config)#</span> <span class="cmd">ipv6 route ::/0 2001:db8:acad:ff03::1</span>
+<span class="prompt">D1(config)#</span> <span class="cmd">end</span>
+<span class="prompt">D1#</span> <span class="cmd">copy running-config startup-config</span></div>
+    </div>
+    <p><strong>R2 needs nothing.</strong> Its default route already sends every HQ-bound packet to R1, and R1 now knows the way to D1.</p>
+    <div class="teach-note">
+      <span class="label">Same address, new box</span>
+      Hosts may still have <strong>R1's MAC address</strong> cached for <code>192.168.10.1</code>: the address didn't change, but the device behind it did. Real devices usually fix this themselves, because a new SVI announces itself with a gratuitous ARP. If a ping to the gateway fails right after a change like this, <code>arp -d</code> on the PC clears the cache.
+    </div>
     <div class="teach-note preview">
       <span class="label">Coming up in CCNA 3</span>
       Here R1 and D1 learn each other's networks from typed-in static routes. Larger networks use a <strong>routing protocol</strong> such as OSPF instead, so routers and Layer 3 switches share their routes automatically. Session 11 introduces the idea; CCNA 3 configures OSPF.
@@ -773,113 +821,12 @@
     </div>
   </section>
 
-  <!-- LAB -->
-  <section id="lab">
-    <div class="section-head">
-      <p class="kicker">Hands-On · Packet Tracer</p>
-      <h2>Lab: open the doors, then hand them over</h2>
-      <p>Two Packet Tracer files, and no recabling in either. Part A builds router-on-a-stick on HQ. Part B moves the job to D1 without changing a single host setting. The configuration is in the sections above. This is the order to do it in, and why the order matters.</p>
-    </div>
-    <h3 class="sub">Part A · Router-on-a-stick</h3>
-    <p>The file opens where Session 2 ended. S1 G0/1, the port facing R1, is still a VLAN 10 access port, and R1 G0/0/1 still holds <code>192.168.10.1</code>. PC-C and PC-D have IPv6 set to Automatic.</p>
-    <ol>
-      <li><strong>Router first.</strong> Clear the old addresses off R1's physical port, because the <code>.10</code> subinterface is about to need <code>192.168.10.1</code>, and IOS won't let two interfaces share one subnet.</li>
-    </ol>
-    <div class="terminal">
-      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">R1 · clear the physical interface</span></div>
-      <div class="terminal-body"><span class="prompt">R1#</span> <span class="cmd">configure terminal</span>
-<span class="prompt">R1(config)#</span> <span class="cmd">interface g0/0/1</span>
-<span class="prompt">R1(config-if)#</span> <span class="cmd">description Trunk to S1 G0/1</span>
-<span class="prompt">R1(config-if)#</span> <span class="hl">no ip address</span>
-<span class="comment">!</span>
-<span class="comment">! With no argument, this removes every IPv6 address on the port, link-local included.</span>
-<span class="prompt">R1(config-if)#</span> <span class="hl">no ipv6 address</span>
-<span class="comment">!</span>
-<span class="comment">! The physical port stays up. Its subinterfaces need it.</span>
-<span class="prompt">R1(config-if)#</span> <span class="cmd">no shutdown</span>
-<span class="prompt">R1(config-if)#</span> <span class="cmd">exit</span></div>
-    </div>
-    <ol start="2">
-      <li><strong>The subinterfaces,</strong> as in <a href="#stick">Router-on-a-stick</a>.</li>
-    </ol>
-    <div class="teach-note">
-      <span class="label">Why did PC-A just lose its gateway?</span>
-      Ping <code>192.168.10.1</code> from PC-A at this point and it fails, even though VLAN 10 worked all through Session 2. R1 now expects frames <strong>tagged</strong>, and S1 G0/1 is still an access port sending them <strong>untagged</strong>. Untagged frames land on <code>.900</code>, which has no address. The next step fixes it.
-    </div>
-    <ol start="3">
-      <li><strong>The trunk on S1 G0/1,</strong> as in <a href="#stick">Router-on-a-stick</a>.</li>
-      <li><strong>Verify</strong> with <a href="#stick-verify">Verify router-on-a-stick</a>, including every row of its "Also test" table.</li>
-    </ol>
-    <h3 class="sub" id="swap">Part B · Hand the doors to D1</h3>
-    <p>The file opens from the finished Part A network, with D1 already added and cabled: R1 G0/0/1 now goes to D1 G1/0/24, and S1 G0/1 goes to D1 G1/0/1. D1's basic settings (hostname, passwords, SSH) are already done. R1's subinterfaces are still configured.</p>
-    <p><strong>Order matters here.</strong> R1 G0/0/1 now faces D1's routed port, not a trunk, so its old subinterfaces are dead ends. But while they exist, R1 still lists the HQ subnets as directly connected, and it would ignore the routes pointing at D1. So R1 gives up the doors first, and D1 takes them second.</p>
-    <ol>
-      <li><strong>R1 gives up the doors.</strong></li>
-    </ol>
-    <div class="terminal">
-      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">R1 · remove the subinterfaces, readdress G0/0/1</span></div>
-      <div class="terminal-body"><span class="prompt">R1#</span> <span class="cmd">configure terminal</span>
-<span class="prompt">R1(config)#</span> <span class="hl">no interface g0/0/1.10</span>
-<span class="prompt">R1(config)#</span> <span class="cmd">no interface g0/0/1.30</span>
-<span class="prompt">R1(config)#</span> <span class="cmd">no interface g0/0/1.99</span>
-<span class="prompt">R1(config)#</span> <span class="cmd">no interface g0/0/1.900</span>
-<span class="comment">!</span>
-<span class="prompt">R1(config)#</span> <span class="cmd">interface g0/0/1</span>
-<span class="prompt">R1(config-if)#</span> <span class="cmd">description Routed link to D1 G1/0/24</span>
-<span class="prompt">R1(config-if)#</span> <span class="hl">ip address 10.0.0.9 255.255.255.252</span>
-<span class="prompt">R1(config-if)#</span> <span class="cmd">ipv6 address fe80::1 link-local</span>
-<span class="prompt">R1(config-if)#</span> <span class="cmd">ipv6 address 2001:db8:acad:ff03::1/64</span>
-<span class="prompt">R1(config-if)#</span> <span class="cmd">no shutdown</span>
-<span class="prompt">R1(config-if)#</span> <span class="cmd">end</span></div>
-    </div>
-    <p>G0/0/1 is back to being a plain routed port, like G0/0/0, on a new <code>/30</code> that links R1 and D1. (On real routers, a deleted subinterface may linger in <code>show ip interface brief</code> as <code>deleted</code> until the next reload. Its configuration is gone.)</p>
-    <ol start="2">
-      <li><strong>D1, in this order:</strong> routing, the VLANs, the routed port to R1, the trunk to S1, and the SVIs last, as in <a href="#l3">Inter-VLAN routing on a Layer 3 switch</a>. Get the ping from D1 to <code>10.0.0.9</code> working before the trunk.</li>
-      <li><strong>The provided routes.</strong></li>
-    </ol>
-    <div class="teach-note preview">
-      <span class="label">Beyond Module 4: static routes</span>
-      Static routes are Module 15 (Session 11). Here they're provided so HQ can reach the rest of the network.
-    </div>
-    <p>Type these exactly. In Part A the HQ networks were directly connected to R1. Now they're connected to D1, one hop away, so R1 needs to be told where they are, and D1 needs to be told where everything else is.</p>
-    <div class="terminal">
-      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">R1 · the HQ networks are behind D1</span></div>
-      <div class="terminal-body"><span class="prompt">R1#</span> <span class="cmd">configure terminal</span>
-<span class="prompt">R1(config)#</span> <span class="cmd">ip route 192.168.10.0 255.255.255.0 10.0.0.10</span>
-<span class="comment">!</span>
-<span class="comment">! The /26 mask, not /24.</span>
-<span class="prompt">R1(config)#</span> <span class="cmd">ip route 192.168.30.0 255.255.255.192 10.0.0.10</span>
-<span class="prompt">R1(config)#</span> <span class="cmd">ip route 192.168.99.0 255.255.255.0 10.0.0.10</span>
-<span class="prompt">R1(config)#</span> <span class="cmd">ipv6 route 2001:db8:acad:10::/64 2001:db8:acad:ff03::2</span>
-<span class="prompt">R1(config)#</span> <span class="cmd">ipv6 route 2001:db8:acad:30::/64 2001:db8:acad:ff03::2</span>
-<span class="prompt">R1(config)#</span> <span class="cmd">ipv6 route 2001:db8:acad:99::/64 2001:db8:acad:ff03::2</span>
-<span class="prompt">R1(config)#</span> <span class="cmd">end</span>
-<span class="prompt">R1#</span> <span class="cmd">copy running-config startup-config</span></div>
-    </div>
-    <div class="terminal">
-      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">D1 · everything else is through R1</span></div>
-      <div class="terminal-body"><span class="prompt">D1#</span> <span class="cmd">configure terminal</span>
-<span class="prompt">D1(config)#</span> <span class="cmd">ip route 0.0.0.0 0.0.0.0 10.0.0.9</span>
-<span class="prompt">D1(config)#</span> <span class="cmd">ipv6 route ::/0 2001:db8:acad:ff03::1</span>
-<span class="prompt">D1(config)#</span> <span class="cmd">end</span>
-<span class="prompt">D1#</span> <span class="cmd">copy running-config startup-config</span></div>
-    </div>
-    <p><strong>R2 needs nothing.</strong> Its default route already sends every HQ-bound packet to R1, and R1 now knows the way to D1.</p>
-    <ol start="4">
-      <li><strong>Clear the stale caches.</strong></li>
-    </ol>
-    <p>The PCs and switches may still have <strong>R1's MAC address</strong> cached for <code>192.168.10.1</code>, <code>.30.1</code> and <code>.99.1</code>. The address is the same, but the box behind it isn't. If a ping to the gateway fails right after the swap, clear the cache: <code>arp -d</code> on PC-A, PC-C and PC-D, and <code>clear arp-cache</code> on S1 and S2. Real devices usually fix this on their own, because a new SVI announces itself with a gratuitous ARP. Packet Tracer may not.</p>
-    <ol start="5">
-      <li><strong>Verify</strong> with <a href="#l3-verify">Verify the Layer 3 switch</a>, and test every row of <a href="#reach">What works now</a>.</li>
-    </ol>
-  </section>
-
   <!-- WHAT WORKS NOW -->
   <section id="reach">
     <div class="section-head">
       <p class="kicker">End of session</p>
       <h2>What works now, and what doesn't</h2>
-      <p>HQ at the end of the session, with D1 routing. Every row can be tested in Packet Tracer.</p>
+      <p>HQ at the end of the session, with D1 routing.</p>
     </div>
     <table class="spec">
       <thead><tr><th>From → To</th><th>Result</th><th>Why</th></tr></thead>
@@ -906,7 +853,7 @@
     <div class="section-head">
       <p class="kicker">Recurring segment</p>
       <h2>The Ticket</h2>
-      <p>Turn it into steps before you open Packet Tracer.</p>
+      <p>Turn it into steps before you open the answer.</p>
     </div>
     <div class="ticket-card">
       <p class="tag">Ticket #141-03 · Priority: medium · From: Logistics</p>

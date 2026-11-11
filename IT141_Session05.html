@@ -34,7 +34,6 @@
     <a href="#troubleshoot">Troubleshoot</a>
     <a href="#stpnow">STP Sees Bundles</a>
     <a href="#rapid">Rapid PVST+</a>
-    <a href="#lab">Lab</a>
     <a href="#mistakes">Common Mistakes</a>
     <a href="#reach">What Works Now</a>
     <a href="#ticket">The Ticket</a>
@@ -68,11 +67,10 @@
       <li>Troubleshoot a bundle that won't form, or forms with members suspended</li>
       <li>Explain how Spanning Tree treats a bundle, and work out its path cost</li>
       <li>Explain what Rapid PVST+ changes: port states, roles, link types, and convergence time</li>
-      <li><strong>In the lab:</strong> bundle all three of HQ's links, then move the triangle to Rapid PVST+ and time a failover</li>
     </ul>
     <div class="teach-note">
       <span class="label">Topology used on this page</span>
-      HQ's triangle from Session 4, with a <strong>second cable on every side</strong>. S1 and S2 are joined by F0/23 <em>and</em> F0/24, S1 to D1 by G0/1–G1/0/1 <em>and</em> G0/2–G1/0/2, and S2 to D1 by G0/1–G1/0/3 <em>and</em> G0/2–G1/0/4. Each pair becomes one bundle: <strong>Po1</strong> (S1–S2, LACP), <strong>Po2</strong> (S1–D1, LACP) and <strong>Po3</strong> (S2–D1, PAgP). D1 is still the STP root, and S1 the backup root. The <a href="#lab">lab</a> at the end builds it in Packet Tracer.
+      HQ's triangle from Session 4, with a <strong>second cable on every side</strong>. S1 and S2 are joined by F0/23 <em>and</em> F0/24, S1 to D1 by G0/1–G1/0/1 <em>and</em> G0/2–G1/0/2, and S2 to D1 by G0/1–G1/0/3 <em>and</em> G0/2–G1/0/4. Each pair becomes one bundle: <strong>Po1</strong> (S1–S2, LACP), <strong>Po2</strong> (S1–D1, LACP) and <strong>Po3</strong> (S2–D1, PAgP). D1 is still the STP root, and S1 the backup root.
     </div>
   </section>
 
@@ -313,6 +311,10 @@
       <li><strong><code>nonegotiate</code> still belongs.</strong> It turns off DTP, which negotiates <em>trunking</em>. LACP and PAgP negotiate <em>bundling</em>, and keep working.</li>
       <li><strong>Group numbers are local.</strong> HQ keeps them matched so the diagram is readable, which is why S2 has a Po1 and a Po3 but no Po2.</li>
     </ul>
+    <div class="teach-note">
+      <span class="label">Changing a live link into a bundle</span>
+      HQ's links were already carrying traffic, so the order of work matters. <strong>1.</strong> Shut every member, on both ends, before typing anything else; a half-built bundle is when loops happen. <strong>2.</strong> Make the members match: the parked cable copies the live one. <strong>3.</strong> <code>channel-group</code> on the members, then the port-channel settings. Don't create an empty port-channel first. <strong>4.</strong> Both ends finished, then <code>no shutdown</code> on both. <strong>5.</strong> Wait for the bundle <em>and</em> Spanning Tree to settle before starting the next one. (Don't reach for <code>default interface</code> to "clean" a port: it turns the port back on.)
+    </div>
     <div class="teach-note">
       <span class="label">How a flow is shared</span>
       The switch picks one member for each <strong>flow</strong>, by a hash of MAC or IP addresses, not one per frame. So a single PC-A to PC-C transfer uses one of Po2's cables and one of Po3's. Each bundle's 2 Gb/s is the total for all flows together, not the speed of any one conversation.
@@ -663,30 +665,6 @@
 
   </section>
 
-  <!-- LAB -->
-  <section id="lab">
-    <div class="section-head">
-      <p class="kicker">Hands-On · Packet Tracer</p>
-      <h2>Lab: double the hallways</h2>
-      <p>Today's file is the end of Session 4: PVST+, D1 root, S1 secondary, with the three new cables already in place and both ends of each still parked (VLAN 999, shut). The configuration is in <a href="#config">Configure</a>. This is the order to do it in, and the order matters, because two of the three links carry live traffic.</p>
-    </div>
-    <div class="teach-note">
-      <span class="label">Five rules for every bundle</span>
-      <strong>1.</strong> Shut every member, on both ends, before typing anything else; a half-built bundle is when loops happen. <strong>2.</strong> Make the members match: the parked cable copies the live one. <strong>3.</strong> <code>channel-group</code> on the members, then the port-channel settings. Don't create an empty port-channel first. <strong>4.</strong> Both ends finished, then <code>no shutdown</code> on both. <strong>5.</strong> Wait for the bundle <em>and</em> Spanning Tree to settle before starting the next one. (Don't reach for <code>default interface</code> to "clean" a port: it turns the port back on.)
-    </div>
-    <ol>
-      <li><strong>Po1 first (S1–S2).</strong> It's the blocked link, so shutting it costs nothing. Shut F0/23–24 on both, configure both ends, bring both up. Check: <code>Po1(SU) LACP</code> on both, and <code>show spanning-tree vlan 10</code> on S2 shows Po1 <code>Altn BLK</code>.</li>
-      <li><strong>Po3 next (S2–D1).</strong> Start <code>ping -t 192.168.10.1</code> on PC-C first. Shut D1 G1/0/3–4 and S2 G0/1–2, configure both ends, bring them up. PC-C loses about 30 seconds, and about 30 more when Po3 comes up: still 802.1D.</li>
-      <li><strong>Po2 last (S1–D1).</strong> Same steps, with <code>ping -t</code> on PC-A. Doing Po3 first gave S1 a ready backup path, so this costs about 30 seconds twice instead of Session 4's 50. Then <code>copy running-config startup-config</code> on all three.</li>
-      <li><strong>Verify</strong> on all three switches: <code>show etherchannel summary</code>, <code>show interfaces trunk</code>, and <code>show spanning-tree vlan 10</code> (<a href="#verify">Verify</a>, <a href="#stpnow">STP sees bundles</a>). One <code>BLK</code> in the network: S2's Po1.</li>
-      <li><strong>Lose one cable, keep the link.</strong> Shut D1 G1/0/1 only. <code>show etherchannel summary</code> shows Gig1/0/1 <code>(D)</code> and Po2 still <code>(SU)</code>, and PC-A's ping keeps going. Then <code>no shutdown</code> it.</li>
-      <li><strong>Rapid PVST+</strong> on D1, then S1, then S2, then <code>clear spanning-tree detected-protocols</code> on each (<a href="#rapid">Rapid PVST+</a>). Check for <code>protocol rstp</code>.</li>
-      <li><strong>Time a failover.</strong> With <code>ping -t</code> on PC-C, shut <code>interface port-channel 3</code> on D1, and watch S2's Po1 go from <code>Altn</code> to <code>Root FWD</code>. Compare the lost pings with step 2. Then <code>no shutdown</code> it.</li>
-      <li><strong>Test</strong> every row of <a href="#reach">What works now</a>.</li>
-    </ol>
-    <p>If a bundle stays <code>(SD)</code> with both ends correct, shut and unshut its members on both ends once. Packet Tracer sometimes needs the nudge.</p>
-  </section>
-
 
   <!-- MISTAKES -->
   <section id="mistakes">
@@ -740,7 +718,7 @@
     <div class="section-head">
       <p class="kicker">Recurring segment</p>
       <h2>The Ticket</h2>
-      <p>Turn it into steps before you open Packet Tracer.</p>
+      <p>Turn it into steps before you open the answer.</p>
     </div>
     <div class="ticket-card">
       <p class="tag">Ticket #141-05 · Priority: low · From: the crew chief</p>

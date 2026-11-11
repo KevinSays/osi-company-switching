@@ -35,7 +35,6 @@
     <a href="#native">Native Mismatch</a>
     <a href="#dtp">DTP</a>
     <a href="#parking">Parking</a>
-    <a href="#lab">Lab</a>
     <a href="#reach">What Works Now</a>
     <a href="#mistakes">Common Mistakes</a>
     <a href="#ticket">The Ticket</a>
@@ -709,38 +708,12 @@
     <p>A parked port is doubly safe: it's shut, and even if someone turns it on, they land in a VLAN with no gateway and no other hosts. In Session 9 you'll also park the unused ports <em>inside</em> the VLAN 10 and 30 ranges.</p>
   </section>
 
-  <!-- LAB -->
-  <section id="lab">
-    <div class="section-head">
-      <p class="kicker">Hands-On · Packet Tracer</p>
-      <h2>Lab: put up the walls</h2>
-      <p>Today's file has the two changes in the <a href="#overview">topology note</a> already made, so nothing needs recabling. S3 is pre-built; Physical view shows the move. The configuration is in the sections above. This is the order to do it in.</p>
-    </div>
-    <ol>
-      <li><strong>See The Sprawl first.</strong> On S2, run <code>clear mac address-table dynamic</code> for a clean result. Then force PC-A's ARP broadcast and check S2's MAC table, as in <a href="#sprawl">The Sprawl</a>. Your MAC addresses will differ from the page.</li>
-    </ol>
-    <div class="teach-note">
-      <span class="label">See it: Simulation mode</span>
-      In Packet Tracer, switch to <strong>Simulation</strong>, filter for ARP, and repeat the ping. Watch PC-A's broadcast reach PC-C <strong>and PC-D</strong>. PC-D is in a different subnet (<code>192.168.30.0/26</code>), but it's in the same broadcast domain, so it still has to receive the frame and throw it away. Multiply that by every host and every broadcast: that's The Sprawl.
-    </div>
-    <ol start="2">
-      <li><strong>Create the VLANs on S1, then the same block on S2</strong> (<a href="#create">Create VLANs and assign ports</a>).</li>
-      <li><strong>Assign the access ports on S1, then on S2,</strong> leaving out S2's <code>g0/1</code>, which gets parked at the end.</li>
-      <li><strong>Move management to VLAN 99</strong> on both switches; S2 uses <code>.12</code> (<a href="#mgmt">Move management</a>). Expect <code>Vlan99</code> up/down, and expect PC-A to lose SSH.</li>
-      <li><strong>Build the trunk on S1 F0/23, then exactly the same on S2</strong> (<a href="#trunks">Configure an 802.1Q trunk</a>). S1 logs a native VLAN mismatch between the two; it stops once S2 is done. Watch for <code>Vlan99</code> changing to up.</li>
-      <li><strong>Try the native mismatch:</strong> on S2 only, <code>no switchport trunk native vlan</code> on F0/23. Read the CDP message on both switches, then put <code>switchport trunk native vlan 900</code> back.</li>
-      <li><strong>Practise changing and deleting.</strong> Move S1 F0/10 to VLAN 1 and back. On S2, delete VLAN 30, watch PC-D drop out, then recreate it (<a href="#change">Change, delete, and reset</a>). Reset a whole switch only on a scratch switch, never in the course file. If you try the voice VLAN example, remove it afterwards.</li>
-      <li><strong>Park the unused ports</strong> on both switches (<a href="#parking">Park the unused ports</a>); S2's range is different.</li>
-      <li><strong>Verify</strong> with <a href="#verify">Verify VLANs</a> and <code>show interfaces trunk</code>, then test every row of <a href="#reach">What works now</a>.</li>
-    </ol>
-  </section>
-
   <!-- WHAT WORKS NOW -->
   <section id="reach">
     <div class="section-head">
       <p class="kicker">End of session</p>
       <h2>What works now, and what doesn't</h2>
-      <p>HQ at the end of the session. Every row can be tested in Packet Tracer. The failures are expected, and they're next session's story.</p>
+      <p>HQ at the end of the session. The failures are expected, and they're next session's story.</p>
     </div>
     <table class="spec">
       <thead><tr><th>From → To</th><th>Result</th><th>Why</th></tr></thead>
@@ -796,7 +769,7 @@
     <div class="section-head">
       <p class="kicker">Recurring segment</p>
       <h2>The Ticket</h2>
-      <p>Turn it into steps before you open Packet Tracer.</p>
+      <p>Turn it into steps before you open the answer.</p>
     </div>
     <div class="ticket-card">
       <p class="tag">Ticket #141-02 · Priority: high · From: Logistics</p>

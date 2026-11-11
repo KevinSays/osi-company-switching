@@ -33,7 +33,6 @@
     <a href="#verify">Verify</a>
     <a href="#forwarding">Frame Forwarding</a>
     <a href="#domains">Switching Domains</a>
-    <a href="#lab">Lab</a>
     <a href="#mistakes">Common Mistakes</a>
     <a href="#ticket">The Ticket</a>
     <a href="#checkpoint">Checkpoint</a>
@@ -455,7 +454,7 @@
     </div>
     <div class="teach-note preview">
       <span class="label">Provided routes</span>
-      R2 comes pre-built in the Packet Tracer file, with default routes pointing back at R1. The two <code>route</code> lines on R1 are provided the same way CCNA 1's Session 12 lab did it: type them exactly for now. Static routes are Module 15 (Session 11), where you'll rebuild every route on this network yourself.
+      R2 has default routes pointing back at R1. The two <code>route</code> lines on R1 are provided, the same way CCNA 1's Session 12 lab provided them. Static routes are Module 15 (Session 11), where every route on this network gets explained.
     </div>
     <div class="teach-note">
       <span class="label">No <code>no shutdown</code> on the loopback?</span>
@@ -484,6 +483,10 @@
         <tr><td class="mono">show ip route<br>show ipv6 route</td><td>See the routing table: connected networks (<code>C</code>) and local addresses (<code>L</code>)</td></tr>
       </tbody>
     </table>
+    <div class="teach-note">
+      <span class="label">Your screen may differ</span>
+      Output on this page is written to match Packet Tracer as closely as we can, but MAC addresses, counters, byte counts, and timestamps will be different on your screen. Packet Tracer sometimes adds or leaves out a line, too. Read for the lines this page highlights.
+    </div>
     <div class="terminal">
       <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">R1 · show ip interface brief</span></div>
       <div class="terminal-body"><span class="prompt">R1#</span> <span class="cmd">show ip interface brief</span>
@@ -740,32 +743,6 @@
     </div>
   </section>
 
-  <!-- LAB -->
-  <section id="lab">
-    <div class="section-head">
-      <p class="kicker">Hands-On · Packet Tracer</p>
-      <h2>Lab: configure, secure, verify</h2>
-      <p>The cold open's clipboard, in order. In today's file R2 is pre-built, with its default routes back to R1. R1, S1 and S2 start blank. The configuration is in the sections above.</p>
-    </div>
-    <div class="teach-note">
-      <span class="label">Your screen may differ</span>
-      Output on this page is written to match Packet Tracer as closely as we can, but MAC addresses, counters, byte counts, and timestamps will be different on your screen. Packet Tracer sometimes adds or leaves out a line, too. Read for the lines this page highlights.
-    </div>
-    <ol>
-      <li><strong>S1, then S2: initial settings and the management SVI</strong> (<a href="#svi">Switch management access</a>). S2 uses its own hostname, <code>192.168.20.2</code>, and gateway <code>192.168.20.1</code>.</li>
-      <li><strong>Force a port's speed and duplex, read <code>show interfaces</code>, then put it back</strong> (<a href="#ports">Switch ports</a>).</li>
-      <li><strong>R1: basic settings, both interfaces, the loopback, and the provided routes</strong> (<a href="#router">Basic router configuration</a>).</li>
-      <li><strong>SSH on S1, S2 and R1,</strong> then log in to all three from PC-A (<a href="#ssh">Secure remote access</a>).</li>
-      <li><strong>Verify</strong> with <a href="#verify">Verify directly connected networks</a>, and try the filters and command history on S1.</li>
-      <li><strong>Watch S1 learn:</strong> empty its MAC table, ping the gateway from PC-A, and read the table again (<a href="#forwarding">How Local Dispatch forwards a frame</a>).</li>
-    </ol>
-    <div class="teach-note">
-      <span class="label">Match it to your screen</span>
-      Your MAC addresses will differ. Check them yourself: PC-A's with <code>ipconfig /all</code>, R1's with <code>show interfaces g0/0/1</code>. If the "empty" table already has R1 in it, that's normal: R1's own periodic traffic (CDP, for one) can refill it within seconds. In Packet Tracer the first ping sometimes times out while ARP resolves.
-    </div>
-
-  </section>
-
   <!-- MISTAKES -->
   <section id="mistakes">
     <div class="section-head">
@@ -825,7 +802,7 @@
     <div class="section-head">
       <p class="kicker">Recurring segment</p>
       <h2>The Ticket</h2>
-      <p>Real work orders don't come as step-by-step lists. Each session ends with a ticket. Turn it into steps <em>before</em> you open Packet Tracer.</p>
+      <p>Real work orders don't come as step-by-step lists. Each session ends with a ticket. Turn it into steps <em>before</em> you open the answer.</p>
     </div>
     <div class="ticket-card">
       <p class="tag">Ticket #141-01 · Priority: normal · From: the NOC</p>

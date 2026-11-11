@@ -34,7 +34,6 @@
     <a href="#verify">Verify</a>
     <a href="#client">Routers as Clients</a>
     <a href="#troubleshoot">Troubleshoot</a>
-    <a href="#lab">Lab</a>
     <a href="#mistakes">Common Mistakes</a>
     <a href="#reach">What Works Now</a>
     <a href="#ticket">The Ticket</a>
@@ -67,7 +66,6 @@
       <li>Verify DHCP on the server and the clients</li>
       <li>Configure a router interface, and a home router's internet port, as DHCPv4 clients</li>
       <li>Troubleshoot clients that end up with 169.254 addresses, or the wrong settings</li>
-      <li><strong>In the lab:</strong> move HQ and the Shipping site to DHCP, through a relay at HQ and directly at R2</li>
     </ul>
     <div class="teach-note">
       <span class="label">Topology used on this page</span>
@@ -535,29 +533,6 @@
 
   </section>
 
-  <!-- LAB -->
-  <section id="lab">
-    <div class="section-head">
-      <p class="kicker">Hands-On · Packet Tracer</p>
-      <h2>Lab: New Hire Day</h2>
-      <p>Today's file starts from the end of Session 5, with two additions at the Shipping site: the home router, cabled by its internet port to S3 F0/3, and a spare ISR4321 on S3 F0/4. Every host is still static, and there's no DHCP configuration anywhere. The configuration is in the sections above; this is the order to do it in.</p>
-    </div>
-    <ol>
-      <li><strong>Watch the problem first (instructor demo).</strong> In Simulation mode with the DHCP filter, PC-C asks for an address before any relay exists. The DISCOVER floods VLAN 10 and stops at D1.</li>
-      <li><strong>R1: the exclusions, then the three pools</strong> (<a href="#server">Configure a server</a>). <code>show ip dhcp binding</code> is still empty, and that's expected.</li>
-      <li><strong>D1: a helper on Vlan10, Vlan30 and Vlan99</strong> (<a href="#relay">Relay</a>). Check with <code>show ip interface vlan 10</code>. Instructor: run the Simulation-mode demo again. This time D1 sends the DISCOVER on to R1 as one unicast, with the giaddr in the PDU details.</li>
-      <li><strong>PC-C and PC-D to DHCP</strong> (Desktop → IP Configuration → DHCP). Check each with <code>ipconfig /all</code>, then try <code>ipconfig /release</code> and <code>/renew</code> on PC-C (<a href="#verify">Verify</a>). PC-A stays static all term.</li>
-      <li><strong>R2: its own pool</strong> (<a href="#direct">R2's own pool</a>). Then check the home router: its GUI tab's Status page should show a <code>192.168.20.x</code> address it leased without anyone touching it (<a href="#client">Routers as clients</a>). If it's still blank, click Save Settings on its Basic Setup page to make it ask again. Then move PC-B to DHCP. The order decides the addresses, so yours may differ from the page by one.</li>
-      <li><strong>Verify on both servers:</strong> <code>show ip dhcp binding</code>, <code>show running-config | section dhcp</code>, and <code>show ip dhcp server statistics</code> on R1 and R2.</li>
-      <li><strong>Optional: a router as a client.</strong> On the spare ISR4321, <code>ip address dhcp</code> and <code>no shutdown</code> on G0/0/0, and check <code>show ip interface brief</code>. Then <code>clear ip dhcp binding</code> with its address on R2, and delete the spare router.</li>
-      <li><strong>Test</strong> every row of <a href="#reach">What works now</a>.</li>
-    </ol>
-    <div class="teach-note">
-      <span class="label">Homework: the same pools on router-on-a-stick</span>
-      Open your Session 3 Part A file, where R1's subinterfaces are the gateways, and add the VLAN 10 and VLAN 30 exclusions and pools to R1. Then answer: why did D1 need <code>ip helper-address</code> today, when R1 in that file doesn't? <em>(In Part A, R1 is on every VLAN, so every DISCOVER reaches it directly. The server has to be on the clients' subnet, or someone has to relay.)</em>
-    </div>
-  </section>
-
 
   <!-- MISTAKES -->
   <section id="mistakes">
@@ -614,7 +589,7 @@
     <div class="section-head">
       <p class="kicker">Recurring segment</p>
       <h2>The Ticket</h2>
-      <p>Turn it into steps before you open Packet Tracer.</p>
+      <p>Turn it into steps before you open the answer.</p>
     </div>
     <div class="ticket-card">
       <p class="tag">Ticket #141-06 · Priority: high · From: Logistics</p>
