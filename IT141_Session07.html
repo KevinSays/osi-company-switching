@@ -1,0 +1,1218 @@
+<meta charset="utf-8">
+<title>IT141 Session 7 – SLAAC, DHCPv6, FHRP &amp; Midterm Review</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/theme.css">
+<script src="assets/site.js" defer></script>
+
+<header class="masthead">
+  <div class="wrap">
+    <p class="eyebrow">IT141 · SESSION 7 · FIELD NOTES</p>
+    <h1>SLAAC, DHCPv6 &amp; the Backup Front Door</h1>
+    <p class="lede">New Hire Day, part two. The IPv4 side of onboarding works: R1 leases addresses and D1 carries the requests. The IPv6 side has needed no server at all, because every router posts a sign that tells hosts how to set themselves up. This session reads that sign, and changes it. Then the front door fails: every HQ host has exactly one gateway, and Module 9 asks what happens when it goes dark.</p>
+    <div class="factrow">
+      <span class="fact"><b>New material</b> Module 8 — SLAAC and DHCPv6; Module 9 — FHRP</span>
+      <span class="fact"><b>Also this week</b> Midterm review</span>
+      <span class="fact"><b>Network change</b> Shipping's IPv6 hosts get DNS from R2</span>
+      <span class="fact"><b>Next session</b> Module group exam 7–9; Module 10 — LAN Security Concepts</span>
+    </div>
+  </div>
+</header>
+
+<nav class="index" data-pin="#flashcards #quiz" aria-label="Section index">
+  <div class="wrap">
+    <a href="index.html" class="toc-link">↩ Contents</a>
+    <a href="#overview">Overview</a>
+    <a href="#midterm">Midterm Review</a>
+    <a href="#assign">Three Ways to a GUA</a>
+    <a href="#slaac">SLAAC</a>
+    <a href="#dhcpv6">How DHCPv6 Works</a>
+    <a href="#stateless">Stateless Server</a>
+    <a href="#stateful">Stateful Server</a>
+    <a href="#methoddrill">Method Drill</a>
+    <a href="#v6client">Routers as Clients</a>
+    <a href="#v6relay">Relay</a>
+    <a href="#fhrp">First-Hop Redundancy</a>
+    <a href="#hsrp">HSRP</a>
+    <a href="#failover">Failover</a>
+    <a href="#mistakes">Common Mistakes</a>
+    <a href="#reach">What Works Now</a>
+    <a href="#ticket">The Ticket</a>
+    <a href="#checkpoint">Checkpoint</a>
+    <a href="#flashcards">Flashcards</a>
+    <a href="#quiz">Quiz</a>
+    <a href="#examples">Examples</a>
+    <a href="#glossary">Glossary</a>
+  </div>
+</nav>
+
+<main class="wrap">
+
+  <!-- OVERVIEW -->
+  <section id="overview">
+    <div class="section-head">
+      <p class="kicker">Modules 8–9</p>
+      <h2>What Session 7 covers</h2>
+      <p>The midterm review comes first. Then two modules, in NetAcad's order: how an IPv6 host gets its global address (SLAAC, stateless DHCPv6 and stateful DHCPv6), and configuring a Cisco router as a DHCPv6 server, client and relay; then first-hop redundancy, and how HSRP keeps a gateway alive when a router fails.</p>
+    </div>
+    <div class="cold-open">
+      <p class="tag">Cold open · Local Dispatch, New Hire Day (continued)</p>
+      <p>The twelve laptops have IPv4 addresses now. The Rookie checks one and frowns. "It has an IPv6 address too. Nobody gave it one." The Surveyor points at the wall by the Shipping door, where R2 posts a sign every few minutes. "Read the sign. It says: here's the street name, pick your own house number. That's all it took." The Rookie looks again. "It doesn't say where the phone book is." "No," she says. "So we'll add a line to the sign." Then the lights in the Front Desk wing flicker, and every laptop on VLAN 10 loses its way out of the building at once. One door, and it just closed. The Surveyor sighs. "And that's why big buildings have two."</p>
+    </div>
+    <ul class="obj-list">
+      <li>Explain the three ways an IPv6 host gets a global unicast address, and how the RA's A, O and M flags choose between them</li>
+      <li>Explain SLAAC: router solicitations and advertisements, how a host builds its interface ID, and duplicate address detection</li>
+      <li>Explain how DHCPv6 works, and how stateless and stateful DHCPv6 differ</li>
+      <li>Configure a Cisco router as a stateless and a stateful DHCPv6 server, and verify both</li>
+      <li>Configure a router interface as a DHCPv6 client, and a router as a DHCPv6 relay agent</li>
+      <li>Explain why a single default gateway is a single point of failure, and how a virtual router fixes it</li>
+      <li>Explain how HSRP elects an active and a standby router: priority, preemption, hellos and states</li>
+    </ul>
+    <div class="teach-note">
+      <span class="label">Topology used on this page</span>
+      The network as Session 6 left it. Module 8's worked example is the Shipping LAN: R2's G0/0/1 (<code>2001:db8:acad:20::1</code>, link-local <code>fe80::2</code>) and PC-B, with SRV1 at <code>2001:db8:acad:20::100</code> as the DNS server. HQ stays on plain SLAAC from D1, for contrast. Module 9's example is a <strong>what-if</strong>: a second Layer 3 switch, D2, next to D1. It isn't part of the course network, and the network goes back to one gateway at the end of the page.
+    </div>
+  </section>
+
+  <!-- MIDTERM REVIEW -->
+  <section id="midterm">
+    <div class="section-head">
+      <p class="kicker">Midterm</p>
+      <h2>Cross-module review</h2>
+      <p>If you can answer these cold, Sessions 1–6 have landed. All of them come straight out of material already covered: this is recall, not new content.</p>
+    </div>
+    <ul class="obj-list">
+      <li><strong>Access or trunk, and which VLAN is native.</strong> An access port carries one VLAN untagged; a trunk carries many, tagged with 802.1Q, except the native VLAN, which crosses untagged and must match at both ends. DTP's auto + auto never makes a trunk (Session 2).</li>
+      <li><strong>Every host's gateway is the router address in its own VLAN.</strong> A subinterface on a router-on-a-stick, or an SVI on a Layer 3 switch with <code>ip routing</code> on. A host pointed at another VLAN's <code>.1</code> reaches nothing off its subnet (Session 3).</li>
+      <li><strong>Lowest bridge ID is root; then root ports, then designated ports; whatever's left blocks.</strong> Priority first (32768 plus the VLAN number by default), then the lowest MAC (Session 4).</li>
+      <li><strong>EtherChannel members must match</strong> in speed, duplex, mode and VLANs. LACP is active/passive, PAgP is desirable/auto, and the two never mix (Session 5).</li>
+      <li><strong>DHCP broadcasts stop at the router.</strong> <code>ip helper-address</code> on the interface where the clients' broadcasts arrive relays them; the server picks the pool from the giaddr. A 169.254 address means no offer came back (Session 6).</li>
+    </ul>
+    <div class="teach-note">
+      <span class="label">Where to actually study</span>
+      Every session page has its own checkpoint, flashcards, quiz and glossary. The midterm is those checkpoints combined, not new material layered on top: <a href="IT141_Session01.html#checkpoint">Session 1</a>, <a href="IT141_Session02.html#checkpoint">2</a>, <a href="IT141_Session03.html#checkpoint">3</a>, <a href="IT141_Session04.html#checkpoint">4</a>, <a href="IT141_Session05.html#checkpoint">5</a> and <a href="IT141_Session06.html#checkpoint">6</a>. Then the drills: <a href="IT141_Session02.html#dtpTool">Will it trunk?</a>, <a href="IT141_Session03.html#whichdoor">Which door?</a>, the <a href="IT141_Session04.html#rootdrill">root election</a> and <a href="IT141_Session05.html#bundledrill">Will it bundle?</a>
+    </div>
+  </section>
+
+  <!-- GUA ASSIGNMENT -->
+  <section id="assign">
+    <div class="section-head">
+      <p class="kicker">Module 8.1</p>
+      <h2>Three ways to a global address</h2>
+      <p>A router's IPv6 addresses are typed in by hand with <code>ipv6 address</code>, and so are a few servers', like SRV1's. Typing a 128-bit address into every PC is slow and easy to get wrong, so hosts are normally set to get their IPv6 configuration automatically. Two things happen when they do.</p>
+    </div>
+    <div class="teach-note callback">
+      <span class="label">CCNA 1 callback</span>
+      In <a href="https://kevinsays.github.io/131/">CCNA 1</a> you met the three methods by name: SLAAC only, SLAAC with stateless DHCPv6, and stateful DHCPv6. You learned that even with stateful DHCPv6, the default gateway still comes from the router's advertisement. The RA flags and the commands that set them were left for CCNA 2. Here they are.
+    </div>
+    <ul class="obj-list">
+      <li><strong>The link-local address comes first, on its own.</strong> As soon as the interface is up, the host makes an <code>fe80::</code> address. It needs no router and no server. In <code>ipconfig</code> a Windows host shows it with a <strong>zone ID</strong> (also called a scope ID) on the end, such as <code>%11</code>: the operating system's label for which interface the address belongs to.</li>
+      <li><strong>The global address depends on the router.</strong> An IPv6 router sends <strong>Router Advertisements</strong> (RAs), ICMPv6 messages that carry the LAN's prefix and the router's own link-local address as the gateway. With no router on the segment, a host has a link-local address and nothing more.</li>
+    </ul>
+    <p>Every RA carries three flags. Together they tell the host which method to use. The host's operating system makes the final decision, but hosts normally follow them.</p>
+    <table class="spec">
+      <thead><tr><th>Flag</th><th>Name</th><th>Set to 1, it means</th><th>Default on a Cisco router</th></tr></thead>
+      <tbody>
+        <tr><td><strong>A</strong></td><td>Address Autoconfiguration</td><td>Build your own global address from the prefix in this RA (SLAAC)</td><td>1</td></tr>
+        <tr><td><strong>O</strong></td><td>Other Configuration</td><td>Get <em>other</em> information, such as DNS servers, from a stateless DHCPv6 server</td><td>0</td></tr>
+        <tr><td><strong>M</strong></td><td>Managed Address Configuration</td><td>Get your address from a stateful DHCPv6 server</td><td>0</td></tr>
+      </tbody>
+    </table>
+    <table class="spec">
+      <thead><tr><th>Method</th><th>Flags</th><th>Global address from</th><th>DNS and other information from</th><th>Default gateway from</th></tr></thead>
+      <tbody>
+        <tr><td><strong>1 · SLAAC only</strong></td><td>A=1, O=0, M=0</td><td>The host, using the RA's prefix</td><td>Nothing by DHCPv6. (An RA can carry a DNS server, but IOS doesn't add one by default.)</td><td rowspan="3"><strong>Always the RA:</strong> the router's link-local address</td></tr>
+        <tr><td><strong>2 · SLAAC + stateless DHCPv6</strong></td><td>A=1, O=1, M=0</td><td>The host, using the RA's prefix</td><td>A stateless DHCPv6 server</td></tr>
+        <tr><td><strong>3 · Stateful DHCPv6</strong></td><td>A=0, M=1</td><td>A stateful DHCPv6 server</td><td>The same DHCPv6 server</td></tr>
+      </tbody>
+    </table>
+    <div class="teach-note warn">
+      <span class="label">The one that's different from DHCPv4</span>
+      DHCPv6 has no default-router option. However a host gets its address, its gateway is the source address of the RA: the router's link-local address. That's why every IPv6 gateway on this site is <code>fe80::1</code> or <code>fe80::2</code>, never a global address.
+    </div>
+  </section>
+
+  <!-- SLAAC -->
+  <section id="slaac">
+    <div class="section-head">
+      <p class="kicker">Module 8.2</p>
+      <h2>SLAAC: the sign on the wall</h2>
+      <p><strong>SLAAC</strong> (Stateless Address Autoconfiguration) lets a host build its own global address with no DHCPv6 server at all. It's <em>stateless</em>: nothing keeps a list of which addresses are in use. It's how PC-C and PC-D have had IPv6 addresses ever since they joined the network.</p>
+    </div>
+    <h3 class="sub">Router solicitations and advertisements</h3>
+    <ul class="obj-list">
+      <li><strong>The router advertises on its own,</strong> every 200 seconds on Cisco IOS by default, to the all-nodes multicast group <code>ff02::1</code>.</li>
+      <li><strong>A host that has just booted doesn't wait.</strong> It sends a <strong>Router Solicitation</strong> (RS) to the all-routers group <code>ff02::2</code>, and the router answers at once with an RA.</li>
+      <li><strong>Only a router sends RAs,</strong> and a Cisco router is only a router for IPv6 after <code>ipv6 unicast-routing</code>. That command joins its interfaces to <code>ff02::2</code> and starts the RAs, with A=1, O=0 and M=0: SLAAC only, by default.</li>
+    </ul>
+        <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">R2 · default router advertisements on the Shipping LAN</span></div>
+      <div class="terminal-body"><span class="prompt">R2#</span> <span class="cmd">show ipv6 interface g0/0/1</span>
+<span class="out">GigabitEthernet0/0/1 is up, line protocol is up</span>
+<span class="out">  IPv6 is enabled, link-local address is FE80::2</span>
+<span class="out">  No Virtual link-local address(es):</span>
+<span class="out">  Global unicast address(es):</span>
+<span class="out">    2001:DB8:ACAD:20::1, subnet is 2001:DB8:ACAD:20::/64</span>
+<span class="out">  Joined group address(es):</span>
+<span class="out">    FF02::1</span>
+<span class="hl">    FF02::2</span>
+<span class="out">    FF02::1:FF00:1</span>
+<span class="out">    FF02::1:FF00:2</span>
+<span class="out">  MTU is 1500 bytes</span>
+<span class="out">  ...</span>
+<span class="out">  ND DAD is enabled, number of DAD attempts: 1</span>
+<span class="out">  ND reachable time is 30000 milliseconds (using 30000)</span>
+<span class="hl">  ND router advertisements are sent every 200 seconds</span>
+<span class="out">  ND router advertisements live for 1800 seconds</span>
+<span class="out">  ND advertised default router preference is Medium</span>
+<span class="hl">  Hosts use stateless autoconfig for addresses.</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong><code>FF02::2</code> is there because <code>ipv6 unicast-routing</code> is on.</strong> It has been on R2 since CCNA 1; nothing was typed today.</li>
+      <li><strong>Four groups:</strong> all-nodes <code>FF02::1</code>, all-routers <code>FF02::2</code>, and one solicited-node group per unicast address: <code>FF02::1:FF00:1</code> for the global <code>::1</code>, and <code>FF02::1:FF00:2</code> for the link-local <code>fe80::2</code>. Each is <code>FF02::1:FF</code> plus the address&#x27;s last 24 bits.</li>
+      <li><strong>"Hosts use stateless autoconfig for addresses."</strong> The default flags: A=1, O=0, M=0, so SLAAC only.</li>
+      <li><strong>"live for 1800 seconds"</strong> is the router lifetime: how long a host keeps R2 as its gateway without hearing another RA. It&#x27;s how the RA, not DHCP, keeps the gateway alive.</li>
+    </ul>
+
+    <h3 class="sub">Building the interface ID</h3>
+    <p>The RA supplies the first 64 bits, the prefix. The host makes the last 64, the <strong>interface ID</strong>, in one of two ways:</p>
+    <table class="spec">
+      <thead><tr><th>Method</th><th>How</th><th>Who uses it</th></tr></thead>
+      <tbody>
+        <tr><td><strong>EUI-64</strong></td><td>The 48-bit MAC, split in half with <code>fffe</code> in the middle, and the seventh bit flipped</td><td>Cisco routers, for their own link-local addresses; many Packet Tracer hosts</td></tr>
+        <tr><td><strong>Random</strong></td><td>64 random bits, chosen by the operating system</td><td>Windows by default (NetAcad's example is Windows 10). It keeps the MAC out of the address, for privacy.</td></tr>
+      </tbody>
+    </table>
+        <p>Until today PC-B had a static IPv6 address, <code>:20::10</code>. Set its IPv6 configuration to automatic and it takes R2&#x27;s offer. The MAC addresses on this page are made up, and so are the DUIDs and leased addresses further down.</p>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">PC-B · IPv6 set to automatic: SLAAC only</span></div>
+      <div class="terminal-body"><span class="prompt">C:\&gt;</span> <span class="cmd">ipconfig /all</span>
+
+<span class="out">FastEthernet0 Connection:(default port)</span>
+
+<span class="out">   Connection-specific DNS Suffix..: it141.example</span>
+<span class="out">   Physical Address................: 0060.70AA.0020</span>
+<span class="out">   Link-local IPv6 Address.........: FE80::260:70FF:FEAA:20</span>
+<span class="hl">   IPv6 Address....................: 2001:DB8:ACAD:20:260:70FF:FEAA:20</span>
+<span class="out">   IPv4 Address....................: 192.168.20.102</span>
+<span class="out">   Subnet Mask.....................: 255.255.255.0</span>
+<span class="hl">   Default Gateway.................: FE80::2</span>
+<span class="out">                                     192.168.20.1</span>
+<span class="out">   DHCP Servers....................: 192.168.20.1</span>
+<span class="out">   DHCPv6 IAID.....................:</span>
+<span class="out">   DHCPv6 Client DUID..............: ...</span>
+<span class="hl">   DNS Servers.....................: ::</span>
+<span class="out">                                     192.168.20.100</span>
+<span class="out">...</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong>The global address is R2&#x27;s /64 prefix plus an interface ID PC-B made itself</strong>, here by EUI-64: <code>0060.70AA.0020</code> → <code>0060:70FF:FEAA:0020</code> → flip the seventh bit → <code>260:70FF:FEAA:20</code>. That&#x27;s why the global and link-local addresses end the same way. A real Windows PC would show a random-looking ending instead.</li>
+      <li><strong>The IPv6 gateway is <code>FE80::2</code></strong>, the source address of R2&#x27;s RAs, not R2&#x27;s global address.</li>
+      <li><strong>No IPv6 DNS server (<code>::</code>).</strong> An RA <em>can</em> carry one, but IOS doesn&#x27;t add it unless configured to (beyond this course). PC-B still resolves names through its IPv4 DNS server from Session 6. That gap is what stateless DHCPv6 fills next.</li>
+    </ul>
+
+    <h3 class="sub">Duplicate address detection</h3>
+    <p>Before using an address it made itself, a host checks that no one else has it. This is <strong>DAD</strong>: the host sends an ICMPv6 <strong>Neighbor Solicitation</strong> (NS) for its own new address, to that address's solicited-node multicast group (<code>ff02::1:ff</code> plus the address's last 24 bits). If a <strong>Neighbor Advertisement</strong> (NA) comes back, someone already owns it, and the host must pick another interface ID. Silence means the address is free. With 2<sup>64</sup> possible interface IDs, a clash is very unlikely, but most operating systems run DAD on every unicast address anyway, however it was configured.</p>
+  </section>
+
+  <!-- DHCPv6 -->
+  <section id="dhcpv6">
+    <div class="section-head">
+      <p class="kicker">Module 8.3</p>
+      <h2>How DHCPv6 works</h2>
+      <p>When the RA says O=1 or M=1, the host still starts with RS and RA, then talks to a DHCPv6 server. DHCPv6 has its own messages, and they don't map one-to-one onto DORA.</p>
+    </div>
+    <figure class="diagram">
+      <svg viewBox="0 0 360 300" style="max-width:460px" role="img" aria-label="Stateful DHCPv6 between PC-B and R2: RS to ff02::2, RA with M=1 to ff02::1, SOLICIT to ff02::1:2, ADVERTISE, REQUEST, REPLY.">
+        <defs><marker id="v6R" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#A23A2E"/></marker><marker id="v6G" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#3F6B4A"/></marker></defs>
+        <g font-family="IBM Plex Mono" font-size="12" fill="currentColor">
+          <rect x="18" y="6" width="104" height="38" fill="none" stroke="currentColor" stroke-width="1.5"/><text x="70" y="22" text-anchor="middle" font-weight="600">PC-B</text><text x="70" y="37" text-anchor="middle" font-size="10">fe80:: only</text><line x1="70" y1="44" x2="70" y2="292" stroke="currentColor" stroke-width="1" stroke-dasharray="3 3" opacity=".6"/>
+          <rect x="238" y="6" width="104" height="38" fill="#3F6B4A" fill-opacity=".14" stroke="#3F6B4A" stroke-width="1.5"/><text x="290" y="22" text-anchor="middle" font-weight="600" fill="#3F6B4A">R2</text><text x="290" y="37" text-anchor="middle" font-size="10" fill="#3F6B4A">router + server</text><line x1="290" y1="44" x2="290" y2="292" stroke="currentColor" stroke-width="1" stroke-dasharray="3 3" opacity=".6"/>
+          <line x1="72" y1="72" x2="288" y2="72" stroke="#A23A2E" stroke-width="1.8" marker-end="url(#v6R)"/><text x="180" y="66" text-anchor="middle" font-size="11" font-weight="600" fill="#A23A2E">1 · RS</text><text x="180" y="86" text-anchor="middle" font-size="10" fill="#A23A2E">to ff02::2</text>
+          <line x1="288" y1="112" x2="72" y2="112" stroke="#3F6B4A" stroke-width="1.8" marker-end="url(#v6G)"/><text x="180" y="106" text-anchor="middle" font-size="11" font-weight="600" fill="#3F6B4A">2 · RA  A=0 M=1</text><text x="180" y="126" text-anchor="middle" font-size="10" fill="#3F6B4A">to ff02::1</text>
+          <line x1="72" y1="152" x2="288" y2="152" stroke="#A23A2E" stroke-width="1.8" marker-end="url(#v6R)"/><text x="180" y="146" text-anchor="middle" font-size="11" font-weight="600" fill="#A23A2E">3 · SOLICIT</text><text x="180" y="166" text-anchor="middle" font-size="10" fill="#A23A2E">to ff02::1:2 · UDP 547</text>
+          <line x1="288" y1="192" x2="72" y2="192" stroke="#3F6B4A" stroke-width="1.8" marker-end="url(#v6G)"/><text x="180" y="186" text-anchor="middle" font-size="11" font-weight="600" fill="#3F6B4A">4 · ADVERTISE</text><text x="180" y="206" text-anchor="middle" font-size="10" fill="#3F6B4A">UDP 546</text>
+          <line x1="72" y1="232" x2="288" y2="232" stroke="#A23A2E" stroke-width="1.8" marker-end="url(#v6R)"/><text x="180" y="226" text-anchor="middle" font-size="11" font-weight="600" fill="#A23A2E">5 · REQUEST</text>
+          <line x1="288" y1="272" x2="72" y2="272" stroke="#3F6B4A" stroke-width="1.8" marker-end="url(#v6G)"/><text x="180" y="266" text-anchor="middle" font-size="11" font-weight="600" fill="#3F6B4A">6 · REPLY</text><text x="180" y="286" text-anchor="middle" font-size="10" fill="#3F6B4A">address, DNS, domain</text>
+        </g>
+      </svg>
+      <figcaption>Figure 1. Stateful DHCPv6 on the Shipping LAN. Steps 1–2 are ICMPv6, the same as SLAAC; steps 3–6 are DHCPv6. The client sends from its link-local address to <code>ff02::1:2</code>, the all-DHCP-servers-and-relays group. Notice what's missing from the REPLY: a gateway. PC-B already has one, from step 2.</figcaption>
+    </figure>
+    <table class="spec">
+      <thead><tr><th>Message</th><th>From → to</th><th>What it says</th></tr></thead>
+      <tbody>
+        <tr><td><strong>SOLICIT</strong></td><td>Client → <code>ff02::1:2</code></td><td>"Is there a DHCPv6 server out there?" (like DHCPDISCOVER)</td></tr>
+        <tr><td><strong>ADVERTISE</strong></td><td>Server → client</td><td>"I can serve you." (like DHCPOFFER)</td></tr>
+        <tr><td><strong>REQUEST</strong></td><td>Client → <code>ff02::1:2</code>, naming the server it chose</td><td>"Send me the address and settings." (like DHCPREQUEST)</td></tr>
+        <tr><td><strong>REPLY</strong></td><td>Server → client</td><td>The address, if stateful, plus DNS servers and the domain name (like DHCPACK)</td></tr>
+        <tr><td><strong>INFORMATION-REQUEST</strong></td><td>Client → <code>ff02::1:2</code></td><td>Stateless only: "I have an address; just send me the other settings." The server answers with a REPLY.</td></tr>
+      </tbody>
+    </table>
+    <ul class="obj-list">
+      <li><strong>Ports:</strong> client-to-server messages go to UDP <strong>547</strong>, server-to-client to UDP <strong>546</strong>. (DHCPv4 used 67 and 68.)</li>
+      <li><strong>No broadcasts.</strong> IPv6 has none. The client uses its link-local address and a multicast group.</li>
+      <li><strong>Stateless vs stateful</strong> is about what the server remembers. A stateless server hands out settings and keeps no record. A stateful server leases addresses, so it keeps a <strong>binding</strong> for every client, just like a DHCPv4 server.</li>
+      <li><strong>The four-message exchange is how a host gets an address.</strong> A stateless host, which only needs the settings, can do it in two: INFORMATION-REQUEST and REPLY. Either way, a stateless server sends settings and keeps no binding.</li>
+    </ul>
+  </section>
+
+  <!-- STATELESS -->
+  <section id="stateless">
+    <div class="section-head">
+      <p class="kicker">Module 8.4</p>
+      <h2>Configure a stateless DHCPv6 server</h2>
+      <p>PC-B builds its own address with SLAAC, but its IPv6 settings list no DNS server. A stateless DHCPv6 server on R2 fills that gap, and the address stays exactly as it is.</p>
+    </div>
+    <p>Five steps on R2:</p>
+    <ol>
+      <li><code>ipv6 unicast-routing</code>, on since CCNA 1</li>
+      <li>Create a pool with <code>ipv6 dhcp pool</code></li>
+      <li>Give it the options: <code>dns-server</code> and <code>domain-name</code>. No addresses: a stateless pool has none.</li>
+      <li>Bind the pool to the LAN interface with <code>ipv6 dhcp server</code></li>
+      <li>Set the O flag on that interface with <code>ipv6 nd other-config-flag</code>. The A flag stays 1, so hosts keep using SLAAC.</li>
+    </ol>
+        <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">R2 · a stateless DHCPv6 server for Shipping</span></div>
+      <div class="terminal-body"><span class="prompt">R2#</span> <span class="cmd">configure terminal</span>
+<span class="prompt">R2(config)#</span> <span class="cmd">ipv6 dhcp pool SHIPPING-STATELESS</span>
+<span class="prompt">R2(config-dhcpv6)#</span> <span class="cmd">dns-server 2001:db8:acad:20::100</span>
+<span class="prompt">R2(config-dhcpv6)#</span> <span class="cmd">domain-name it141.example</span>
+<span class="prompt">R2(config-dhcpv6)#</span> <span class="cmd">exit</span>
+<span class="prompt">R2(config)#</span> <span class="cmd">interface g0/0/1</span>
+<span class="prompt">R2(config-if)#</span> <span class="hl">ipv6 dhcp server SHIPPING-STATELESS</span>
+<span class="comment">!</span>
+<span class="comment">! Set the O flag: addresses by SLAAC, everything else from DHCPv6</span>
+<span class="prompt">R2(config-if)#</span> <span class="hl">ipv6 nd other-config-flag</span>
+<span class="prompt">R2(config-if)#</span> <span class="cmd">end</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong>No <code>address prefix</code> line.</strong> A stateless pool has options only.</li>
+      <li><strong>The pool does nothing until it&#x27;s bound</strong> with <code>ipv6 dhcp server</code>. That&#x27;s a real difference from Session 6, where a DHCPv4 pool matched its clients by subnet with no interface command at all.</li>
+      <li><strong>The O flag is what makes hosts ask.</strong> A bound pool with no O flag gets no requests; an O flag with no bound pool gets requests nobody answers. It takes both halves.</li>
+      <li><code>ipv6 unicast-routing</code> is NetAcad&#x27;s first step. It&#x27;s already on R2, so it isn&#x27;t typed again.</li>
+    </ul>
+
+        <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">R2 · the O flag is on and the pool is bound</span></div>
+      <div class="terminal-body"><span class="prompt">R2#</span> <span class="cmd">show ipv6 interface g0/0/1</span>
+<span class="out">...</span>
+<span class="out">  ND advertised default router preference is Medium</span>
+<span class="out">  Hosts use stateless autoconfig for addresses.</span>
+<span class="hl">  Hosts use DHCP to obtain other configuration.</span>
+
+<span class="prompt">R2#</span> <span class="cmd">show ipv6 dhcp interface g0/0/1</span>
+<span class="out">GigabitEthernet0/0/1 is in server mode</span>
+<span class="hl">  Using pool: SHIPPING-STATELESS</span>
+<span class="out">  Preference value: 0</span>
+<span class="out">  Hint from client: ignored</span>
+<span class="out">  Rapid-Commit: disabled</span>
+
+<span class="prompt">R2#</span> <span class="cmd">show ipv6 dhcp pool</span>
+<span class="out">DHCPv6 pool: SHIPPING-STATELESS</span>
+<span class="out">  DNS server: 2001:DB8:ACAD:20::100</span>
+<span class="out">  Domain name: it141.example</span>
+<span class="hl">  Active clients: 0</span>
+
+<span class="prompt">R2#</span> <span class="cmd">show ipv6 dhcp binding</span>
+<span class="prompt">R2#</span></div>
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">PC-B · the same SLAAC address, now with an IPv6 DNS server</span></div>
+      <div class="terminal-body"><span class="prompt">C:\&gt;</span> <span class="cmd">ipconfig /all</span>
+<span class="out">...</span>
+<span class="hl">   IPv6 Address....................: 2001:DB8:ACAD:20:260:70FF:FEAA:20</span>
+<span class="out">   ...</span>
+<span class="out">   Default Gateway.................: FE80::2</span>
+<span class="out">                                     192.168.20.1</span>
+<span class="out">   DHCPv6 Client DUID..............: 00-01-00-01-A1-B2-C3-D4-00-60-70-AA-00-20</span>
+<span class="hl">   DNS Servers.....................: 2001:DB8:ACAD:20::100</span>
+<span class="out">                                     192.168.20.100</span>
+<span class="out">...</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong>One new line on R2.</strong> "Stateless autoconfig for addresses" stays, because A is still 1; the O flag adds "DHCP to obtain other configuration".</li>
+      <li><strong>PC-B&#x27;s address didn&#x27;t change.</strong> Only its DNS servers did. (The DNS suffix is no proof: PC-B already had <code>it141.example</code> from DHCPv4.)</li>
+      <li><strong>An empty <code>show ipv6 dhcp binding</code> is the right answer.</strong> A stateless server keeps no record of who asked; <code>Active clients: 0</code> says the same. That&#x27;s what <em>stateless</em> means.</li>
+      <li><strong>The DUID</strong> (DHCP unique identifier) is how a DHCPv6 client identifies itself. It usually contains a MAC address, but it isn&#x27;t one.</li>
+    </ul>
+
+  </section>
+
+  <!-- STATEFUL -->
+  <section id="stateful">
+    <div class="section-head">
+      <p class="kicker">Module 8.4</p>
+      <h2>Configure a stateful DHCPv6 server</h2>
+      <p>A stateful server leases the addresses too, and keeps a record of who has which. That's what an administrator wants when they need to know exactly which host had an address at a given time.</p>
+    </div>
+    <p>The same five steps, with three differences:</p>
+    <ul class="obj-list">
+      <li><strong>The pool has addresses:</strong> an <code>address prefix</code> line.</li>
+      <li><strong>The M flag goes to 1:</strong> <code>ipv6 nd managed-config-flag</code>.</li>
+      <li><strong>The A flag goes to 0:</strong> <code>ipv6 nd prefix default no-autoconfig</code>. Without this, hosts follow both instructions and end up with two global addresses, one they made and one they leased.</li>
+    </ul>
+        <p>NetAcad&#x27;s own DHCPv6 lab leases from a longer prefix inside the LAN&#x27;s /64, and so does R2 here: <code>2001:db8:acad:20:aaaa::/80</code>. The RA still advertises the /64, so the subnet doesn&#x27;t change, but every lease starts <code>…:20:aaaa:</code>. IOS DHCPv6 has no <code>excluded-address</code> command, so this is how leases are kept away from R2&#x27;s <code>::1</code> and SRV1&#x27;s <code>::100</code>: the IPv6 version of Session 6&#x27;s "statics below .100" rule.</p>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">R2 · switching Shipping to stateful DHCPv6</span></div>
+      <div class="terminal-body"><span class="prompt">R2#</span> <span class="cmd">configure terminal</span>
+<span class="prompt">R2(config)#</span> <span class="cmd">ipv6 dhcp pool SHIPPING-STATEFUL</span>
+<span class="prompt">R2(config-dhcpv6)#</span> <span class="hl">address prefix 2001:db8:acad:20:aaaa::/80</span>
+<span class="prompt">R2(config-dhcpv6)#</span> <span class="cmd">dns-server 2001:db8:acad:20::100</span>
+<span class="prompt">R2(config-dhcpv6)#</span> <span class="cmd">domain-name it141.example</span>
+<span class="prompt">R2(config-dhcpv6)#</span> <span class="cmd">exit</span>
+<span class="prompt">R2(config)#</span> <span class="cmd">interface g0/0/1</span>
+<span class="comment">!</span>
+<span class="comment">! One DHCPv6 pool per interface: unbind the stateless pool, bind the stateful one</span>
+<span class="prompt">R2(config-if)#</span> <span class="cmd">no ipv6 dhcp server SHIPPING-STATELESS</span>
+<span class="prompt">R2(config-if)#</span> <span class="cmd">ipv6 dhcp server SHIPPING-STATEFUL</span>
+<span class="comment">!</span>
+<span class="comment">! M flag on: get your address from DHCPv6</span>
+<span class="prompt">R2(config-if)#</span> <span class="hl">ipv6 nd managed-config-flag</span>
+<span class="comment">!</span>
+<span class="comment">! A flag off: don&#x27;t build a SLAAC address from this prefix</span>
+<span class="prompt">R2(config-if)#</span> <span class="hl">ipv6 nd prefix default no-autoconfig</span>
+<span class="comment">!</span>
+<span class="comment">! Optional: O adds nothing once M is set</span>
+<span class="prompt">R2(config-if)#</span> <span class="cmd">no ipv6 nd other-config-flag</span>
+<span class="prompt">R2(config-if)#</span> <span class="cmd">end</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong>Three flags, three lines:</strong> M=1, A=0, and (optionally) O=0, which makes the flags read A=0, O=0, M=1, as in the module.</li>
+      <li><strong>Forgetting <code>no-autoconfig</code> is the classic error.</strong> The host then builds a SLAAC address <em>and</em> leases one.</li>
+      <li><strong>No lifetime given,</strong> so IOS uses its own: the output below shows 1 day preferred, 2 days valid.</li>
+    </ul>
+
+        <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">R2 · the M flag is on</span></div>
+      <div class="terminal-body"><span class="prompt">R2#</span> <span class="cmd">show ipv6 interface g0/0/1</span>
+<span class="out">...</span>
+<span class="out">  ND advertised default router preference is Medium</span>
+<span class="hl">  Hosts use DHCP to obtain routable addresses.</span></div>
+    </div>
+    <p>PC-B doesn&#x27;t drop its SLAAC address the moment the flags change: with A=0 it stops being refreshed and ages out. To see the clean result straight away, restart PC-B&#x27;s connection: in Packet Tracer, set IPv6 to Static and back to Automatic; on a real Windows PC, disable and re-enable the network adapter. (<code>ipconfig /renew6</code> alone would lease the new address but leave the old SLAAC one in place for now.)</p>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">PC-B · a leased address, the same gateway</span></div>
+      <div class="terminal-body"><span class="prompt">C:\&gt;</span> <span class="cmd">ipconfig /all</span>
+<span class="out">...</span>
+<span class="out">   Link-local IPv6 Address.........: FE80::260:70FF:FEAA:20</span>
+<span class="hl">   IPv6 Address....................: 2001:DB8:ACAD:20:AAAA:8A2B:34D7:9F60</span>
+<span class="out">   IPv4 Address....................: 192.168.20.102</span>
+<span class="out">   Subnet Mask.....................: 255.255.255.0</span>
+<span class="hl">   Default Gateway.................: FE80::2</span>
+<span class="out">                                     192.168.20.1</span>
+<span class="out">   DHCPv6 IAID.....................: 0A0B0C0D</span>
+<span class="out">   DHCPv6 Client DUID..............: 00-01-00-01-A1-B2-C3-D4-00-60-70-AA-00-20</span>
+<span class="out">   DNS Servers.....................: 2001:DB8:ACAD:20::100</span>
+<span class="out">                                     192.168.20.100</span>
+<span class="out">...</span></div>
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">R2 · now the server keeps state</span></div>
+      <div class="terminal-body"><span class="prompt">R2#</span> <span class="cmd">show ipv6 dhcp binding</span>
+<span class="hl">Client: FE80::260:70FF:FEAA:20</span>
+<span class="out">  DUID: 00010001A1B2C3D4006070AA0020</span>
+<span class="out">  ...</span>
+<span class="out">  IA NA: IA ID 0x0A0B0C0D, T1 43200, T2 69120</span>
+<span class="hl">    Address: 2001:DB8:ACAD:20:AAAA:8A2B:34D7:9F60</span>
+<span class="out">            preferred lifetime 86400, valid lifetime 172800</span>
+<span class="out">            expires at ... (172780 seconds)</span>
+
+<span class="prompt">R2#</span> <span class="cmd">show ipv6 dhcp pool</span>
+<span class="out">DHCPv6 pool: SHIPPING-STATEFUL</span>
+<span class="hl">  Address allocation prefix: 2001:DB8:ACAD:20:AAAA::/80 valid 172800 preferred 86400 (1 in use, 0 conflicts)</span>
+<span class="out">  DNS server: 2001:DB8:ACAD:20::100</span>
+<span class="out">  Domain name: it141.example</span>
+<span class="hl">  Active clients: 1</span>
+<span class="out">DHCPv6 pool: SHIPPING-STATELESS</span>
+<span class="out">  DNS server: 2001:DB8:ACAD:20::100</span>
+<span class="out">  Domain name: it141.example</span>
+<span class="out">  Active clients: 0</span></div>
+    </div>
+    <div class="teach-note callback">
+      <span class="label">CCNA 1 callback</span>
+      The gateway is still <code>FE80::2</code>, and it came from R2&#x27;s RA, not from DHCPv6. A fully stateful host still learns its gateway from the router&#x27;s advertisement, exactly as CCNA 1 said. That&#x27;s why R2 keeps sending RAs, with M=1.
+    </div>
+    <ul class="obj-list">
+      <li><strong>The address no longer matches the MAC.</strong> It was leased, not built. The link-local address is still EUI-64: put the two lines side by side, and you can see the method changed.</li>
+      <li><strong>The binding names the client by its link-local address and DUID</strong>, not by its MAC.</li>
+      <li><strong>T1 and T2 are 50% and 80%</strong> of the preferred lifetime: the same idea as Session 6, but T2 isn&#x27;t DHCPv4&#x27;s 87.5%.</li>
+    </ul>
+
+  </section>
+
+  <!-- METHOD DRILL -->
+  <section id="methoddrill">
+    <div class="section-head">
+      <p class="kicker">Drill</p>
+      <h2>Which method?</h2>
+      <p>Here are the RA lines on a router's LAN interface (with <code>ipv6 unicast-routing</code> on). What does a Windows host on that LAN end up doing?</p>
+    </div>
+    <div class="tool" id="raTool">
+      <p class="tool-title">Drill · Which method?</p>
+      <div class="sorter-case" id="raCase"></div>
+      <div class="sorter-btns" id="raBtns"></div>
+      <div class="tool-out" id="raOut"></div>
+      <div class="toolbar" style="margin:12px 0 0;">
+        <button class="btn" id="raNext">Next interface</button>
+        <span id="raScore" style="font-family:var(--mono); font-size:.85rem; opacity:.75;"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ROUTERS AS CLIENTS -->
+  <section id="v6client">
+    <div class="section-head">
+      <p class="kicker">Module 8.4</p>
+      <h2>A router as a DHCPv6 client</h2>
+      <p>A Cisco router can be a DHCPv6 server, a relay agent, or a client. As a client, its interface takes its IPv6 configuration from a server on the link, just as a PC does. In Session 6 a scratch router leased an IPv4 address from R2; here the same router does it for IPv6.</p>
+    </div>
+    <p>A client interface needs a link-local address before it can send anything. A router makes one automatically when the interface gets a global address; with no global address yet, <code>ipv6 enable</code> makes one on its own, using EUI-64.</p>
+        <p>The scratch router plugs into S3 F0/4 on the Shipping LAN, as in Session 6.</p>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">Scratch router · a stateless DHCPv6 client on the Shipping LAN</span></div>
+      <div class="terminal-body"><span class="prompt">Router(config)#</span> <span class="cmd">ipv6 unicast-routing</span>
+<span class="prompt">Router(config)#</span> <span class="cmd">interface g0/0/0</span>
+<span class="comment">!</span>
+<span class="comment">! Creates the link-local address (EUI-64) with no global address yet</span>
+<span class="prompt">Router(config-if)#</span> <span class="cmd">ipv6 enable</span>
+<span class="prompt">Router(config-if)#</span> <span class="hl">ipv6 address autoconfig</span>
+<span class="prompt">Router(config-if)#</span> <span class="cmd">no shutdown</span>
+<span class="prompt">Router(config-if)#</span> <span class="cmd">end</span>
+
+<span class="prompt">Router#</span> <span class="cmd">show ipv6 interface brief</span>
+<span class="out">GigabitEthernet0/0/0   [up/up]</span>
+<span class="out">    FE80::250:FFF:FE12:4</span>
+<span class="hl">    2001:DB8:ACAD:20:250:FFF:FE12:4</span>
+<span class="out">GigabitEthernet0/0/1   [administratively down/down]</span>
+<span class="out">    unassigned</span>
+<span class="out">...</span>
+
+<span class="prompt">Router#</span> <span class="cmd">show ipv6 dhcp interface g0/0/0</span>
+<span class="out">GigabitEthernet0/0/0 is in client mode</span>
+<span class="out">  Prefix State is IDLE (0)</span>
+<span class="out">  Information refresh timer expires in 23:59:46</span>
+<span class="out">  Address State is IDLE</span>
+<span class="out">  List of known servers:</span>
+<span class="hl">    Reachable via address: FE80::2</span>
+<span class="out">    DUID: 00030001000164382A01</span>
+<span class="out">    Preference: 0</span>
+<span class="out">    Configuration parameters:</span>
+<span class="hl">      DNS server: 2001:DB8:ACAD:20::100</span>
+<span class="hl">      Domain name: it141.example</span>
+<span class="out">      Information refresh time: 0</span>
+<span class="out">  Prefix Rapid-Commit: disabled</span>
+<span class="out">  Address Rapid-Commit: disabled</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong><code>ipv6 address autoconfig</code> is SLAAC on a router interface.</strong> IOS uses EUI-64, so the global address ends like the link-local one.</li>
+      <li><strong>The DNS server and domain came from R2&#x27;s stateless pool</strong> ("Reachable via FE80::2" is R2). <code>Address State is IDLE</code>: no address was leased, which is right for stateless.</li>
+    </ul>
+    <div class="teach-note preview">
+      <span class="label">Beyond the module</span>
+      With <code>ipv6 unicast-routing</code> on, the scratch router is a router too, and may start sending its own RAs onto the Shipping LAN. A host that hears two routers&#x27; RAs can end up with two gateways. That&#x27;s one reason a stray router is a security problem (Session 9).
+    </div>
+
+        <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">Scratch router · a stateful DHCPv6 client (while R2 is stateful)</span></div>
+      <div class="terminal-body"><span class="prompt">Router(config)#</span> <span class="cmd">interface g0/0/0</span>
+<span class="prompt">Router(config-if)#</span> <span class="cmd">no ipv6 address autoconfig</span>
+<span class="prompt">Router(config-if)#</span> <span class="hl">ipv6 address dhcp</span>
+<span class="prompt">Router(config-if)#</span> <span class="cmd">end</span>
+
+<span class="prompt">Router#</span> <span class="cmd">show ipv6 dhcp interface g0/0/0</span>
+<span class="out">GigabitEthernet0/0/0 is in client mode</span>
+<span class="out">  Prefix State is IDLE</span>
+<span class="hl">  Address State is OPEN</span>
+<span class="out">  Renew for address will be sent in 11:59:43</span>
+<span class="out">  List of known servers:</span>
+<span class="out">    Reachable via address: FE80::2</span>
+<span class="out">    DUID: 00030001000164382A01</span>
+<span class="out">    Preference: 0</span>
+<span class="out">    Configuration parameters:</span>
+<span class="out">      IA NA: IA ID 0x00060001, T1 43200, T2 69120</span>
+<span class="hl">        Address: 2001:DB8:ACAD:20:AAAA:7E3A:1B02:66A9/128</span>
+<span class="out">                preferred lifetime 86400, valid lifetime 172800</span>
+<span class="out">                expires at ... (172783 seconds)</span>
+<span class="out">      DNS server: 2001:DB8:ACAD:20::100</span>
+<span class="out">      Domain name: it141.example</span>
+<span class="out">      Information refresh time: 0</span>
+<span class="out">  Prefix Rapid-Commit: disabled</span>
+<span class="out">  Address Rapid-Commit: disabled</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong><code>ipv6 address dhcp</code> makes it a stateful client.</strong> <code>Address State is OPEN</code> means it holds a lease, and R2&#x27;s binding table now lists a second client.</li>
+      <li><strong>The /128 is normal.</strong> DHCPv6 hands out an address but no prefix length, so IOS installs the address as a /128.</li>
+    </ul>
+    <h3 class="sub">Back to stateless</h3>
+    <p>Shipping doesn&#x27;t stay stateful. It ends this session where the stateless section left it: SLAAC for addresses, R2 for DNS.</p>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">R2 · back to stateless, the end state for Shipping</span></div>
+      <div class="terminal-body"><span class="prompt">R2#</span> <span class="cmd">clear ipv6 dhcp binding *</span>
+<span class="prompt">R2#</span> <span class="cmd">configure terminal</span>
+<span class="prompt">R2(config)#</span> <span class="cmd">interface g0/0/1</span>
+<span class="prompt">R2(config-if)#</span> <span class="cmd">no ipv6 nd managed-config-flag</span>
+<span class="prompt">R2(config-if)#</span> <span class="cmd">no ipv6 nd prefix default no-autoconfig</span>
+<span class="prompt">R2(config-if)#</span> <span class="cmd">no ipv6 dhcp server SHIPPING-STATEFUL</span>
+<span class="prompt">R2(config-if)#</span> <span class="cmd">ipv6 dhcp server SHIPPING-STATELESS</span>
+<span class="prompt">R2(config-if)#</span> <span class="hl">ipv6 nd other-config-flag</span>
+<span class="prompt">R2(config-if)#</span> <span class="cmd">exit</span>
+<span class="prompt">R2(config)#</span> <span class="cmd">no ipv6 dhcp pool SHIPPING-STATEFUL</span>
+<span class="prompt">R2(config)#</span> <span class="cmd">end</span>
+
+<span class="prompt">R2#</span> <span class="cmd">show ipv6 interface g0/0/1</span>
+<span class="out">...</span>
+<span class="out">  Hosts use stateless autoconfig for addresses.</span>
+<span class="out">  Hosts use DHCP to obtain other configuration.</span></div>
+    </div>
+    <p>A host doesn&#x27;t give up a leased address just because the M flag went away: it keeps it until it&#x27;s released or expires. After PC-B renews, it&#x27;s back on its EUI-64 SLAAC address, with R2&#x27;s DNS server.</p>
+
+  </section>
+
+  <!-- RELAY -->
+  <section id="v6relay">
+    <div class="section-head">
+      <p class="kicker">Module 8.4</p>
+      <h2>DHCPv6 relay</h2>
+      <p>A SOLICIT goes to <code>ff02::1:2</code>, a link-local multicast group, so it never leaves the LAN. A DHCPv6 server on another network needs a relay agent, the same job <code>ip helper-address</code> did for DHCPv4 in Session 6.</p>
+    </div>
+        <p><strong>What if</strong> HQ&#x27;s VLAN 10 got stateful DHCPv6 from R1, the way it gets DHCPv4? It isn&#x27;t configured; HQ stays on plain SLAAC all term. VLAN 10&#x27;s hosts hear D1&#x27;s RAs, so D1 is where both the flags and the relay go.</p>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">D1 · what-if: flags and relay on the clients&#x27; SVI (not configured on HQ)</span></div>
+      <div class="terminal-body"><span class="prompt">D1(config)#</span> <span class="cmd">interface vlan 10</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">ipv6 nd managed-config-flag</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">ipv6 nd prefix default no-autoconfig</span>
+<span class="prompt">D1(config-if)#</span> <span class="hl">ipv6 dhcp relay destination 2001:db8:acad:ff03::1</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">end</span>
+
+<span class="prompt">D1#</span> <span class="cmd">show ipv6 dhcp interface vlan 10</span>
+<span class="out">Vlan10 is in relay mode</span>
+<span class="out">  Relay destinations:</span>
+<span class="hl">    2001:DB8:ACAD:FF03::1</span></div>
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">R1 · what-if: the pool, bound where the relayed requests arrive</span></div>
+      <div class="terminal-body"><span class="prompt">R1(config)#</span> <span class="cmd">ipv6 dhcp pool HQ-VLAN10-V6</span>
+<span class="prompt">R1(config-dhcpv6)#</span> <span class="cmd">address prefix 2001:db8:acad:10:aaaa::/80</span>
+<span class="prompt">R1(config-dhcpv6)#</span> <span class="cmd">dns-server 2001:db8:acad:20::100</span>
+<span class="prompt">R1(config-dhcpv6)#</span> <span class="cmd">domain-name it141.example</span>
+<span class="prompt">R1(config-dhcpv6)#</span> <span class="cmd">exit</span>
+<span class="prompt">R1(config)#</span> <span class="cmd">interface g0/0/1</span>
+<span class="prompt">R1(config-if)#</span> <span class="cmd">ipv6 dhcp server HQ-VLAN10-V6</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong>The relay goes on the interface facing the clients</strong>, the same place as Session 6&#x27;s <code>ip helper-address</code>.</li>
+      <li><strong>Why <code>ff03::1</code>?</strong> It&#x27;s R1&#x27;s end of the D1 link, directly connected: the IPv6 twin of Session 6&#x27;s <code>10.0.0.9</code>. It&#x27;s a global address, so no exit interface is needed. Aimed at R1&#x27;s link-local address instead, the command must name the interface too: <code>ipv6 dhcp relay destination fe80::1 g1/0/24</code>.</li>
+      <li><strong>The flags go on D1, not R1.</strong> They belong to the router whose RAs the hosts hear. A relay with no M or O flag in the RA relays nothing, because no host asks.</li>
+      <li><strong>R1&#x27;s pool is bound to G0/0/1,</strong> the interface the relayed requests arrive on.</li>
+    </ul>
+
+  </section>
+
+  <!-- FHRP -->
+  <section id="fhrp">
+    <div class="section-head">
+      <p class="kicker">Module 9.1</p>
+      <h2>First-hop redundancy: one gateway is one point of failure</h2>
+      <p>Every host has one IPv4 default gateway. At HQ that's D1: <code>192.168.10.1</code> for Front Desk and <code>192.168.30.1</code> for Logistics. If D1 fails, those hosts can still reach each other inside their own VLAN, and nothing else. A second router on the same VLANs wouldn't help on its own, because no host would know to use it.</p>
+    </div>
+    <p>The fix is a <strong>virtual router</strong>. Two or more routers share one IP address and one MAC address, and hosts use that shared address as their gateway. One router does the forwarding; the others wait. When a host ARPs for the gateway, it gets the <em>virtual</em> MAC, so it never knows, or cares, which physical router is answering. That ability to recover from a failed gateway is <strong>first-hop redundancy</strong>, and the protocols that run it are <strong>FHRPs</strong> (first-hop redundancy protocols).</p>
+    <p>When the forwarding router fails:</p>
+    <ol>
+      <li>The standby router stops hearing <strong>hello</strong> messages from it.</li>
+      <li>The standby router takes over the forwarding role.</li>
+      <li>It takes over the virtual IP <em>and</em> the virtual MAC, so the hosts' ARP caches are still right, and they carry on with no change.</li>
+    </ol>
+    <table class="spec">
+      <thead><tr><th>FHRP</th><th>Whose</th><th>What to know</th></tr></thead>
+      <tbody>
+        <tr><td><strong>HSRP</strong> (Hot Standby Router Protocol)</td><td>Cisco</td><td>One active router forwards and one standby waits. <strong>HSRP for IPv6</strong> does the same for IPv6, with a virtual link-local gateway.</td></tr>
+        <tr><td><strong>VRRPv2</strong> (Virtual Router Redundancy Protocol)</td><td>Open standard</td><td>IPv4 only. One <strong>virtual router master</strong> forwards; the others are backups.</td></tr>
+        <tr><td><strong>VRRPv3</strong></td><td>Open standard</td><td>IPv4 and IPv6; works between vendors and scales better than v2</td></tr>
+        <tr><td><strong>GLBP</strong> (Gateway Load Balancing Protocol)</td><td>Cisco</td><td>Redundancy <em>and</em> load balancing: every router in the group forwards some of the traffic. <strong>GLBP for IPv6</strong> does the same for IPv6.</td></tr>
+        <tr><td><strong>IRDP</strong> (ICMP Router Discovery Protocol)</td><td>RFC 1256</td><td>Legacy: hosts discover routers themselves. You'll only meet it as a name.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- HSRP -->
+  <section id="hsrp">
+    <div class="section-head">
+      <p class="kicker">Module 9.2</p>
+      <h2>HSRP: the backup front door</h2>
+      <p>HSRP picks one <strong>active</strong> router to forward for the virtual address and one <strong>standby</strong> router to watch it and take over. Any others in the group just listen.</p>
+    </div>
+    <figure class="diagram">
+      <svg viewBox="0 0 360 250" style="max-width:460px" role="img" aria-label="HSRP what-if at HQ: PC-C's gateway is the virtual router 192.168.10.1. D1 at 192.168.10.2 is active with priority 150; D2 at 192.168.10.3 is standby with priority 100. They exchange hellos every 3 seconds.">
+        <defs><marker id="hsG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#3F6B4A"/></marker></defs>
+        <g font-family="IBM Plex Mono" font-size="12" fill="currentColor">
+          <rect x="20" y="10" width="130" height="58" fill="#3F6B4A" fill-opacity=".14" stroke="#3F6B4A" stroke-width="1.5"/><text x="85" y="28" text-anchor="middle" font-weight="600" fill="#3F6B4A">D1 · ACTIVE</text><text x="85" y="44" text-anchor="middle" font-size="10">Vlan10 .2</text><text x="85" y="59" text-anchor="middle" font-size="10">priority 150</text>
+          <rect x="210" y="10" width="130" height="58" fill="none" stroke="currentColor" stroke-width="1.5"/><text x="275" y="28" text-anchor="middle" font-weight="600">D2 · STANDBY</text><text x="275" y="44" text-anchor="middle" font-size="10">Vlan10 .3</text><text x="275" y="59" text-anchor="middle" font-size="10">priority 100</text>
+          <line x1="152" y1="30" x2="208" y2="30" stroke="currentColor" stroke-width="1" stroke-dasharray="4 3"/><text x="180" y="24" text-anchor="middle" font-size="9.5">hellos</text><text x="180" y="44" text-anchor="middle" font-size="9.5">every 3 s</text>
+          <rect x="95" y="106" width="170" height="44" fill="none" stroke="#3F6B4A" stroke-width="1.5" stroke-dasharray="5 3"/><text x="180" y="124" text-anchor="middle" font-weight="600" fill="#3F6B4A">virtual router</text><text x="180" y="140" text-anchor="middle" font-size="10" fill="#3F6B4A">192.168.10.1</text>
+          <line x1="85" y1="68" x2="140" y2="104" stroke="#3F6B4A" stroke-width="1.8"/><line x1="275" y1="68" x2="220" y2="104" stroke="currentColor" stroke-width="1" stroke-dasharray="3 3" opacity=".7"/>
+          <line x1="180" y1="194" x2="180" y2="154" stroke="#3F6B4A" stroke-width="1.8" marker-end="url(#hsG)"/>
+          <rect x="115" y="196" width="130" height="44" fill="none" stroke="currentColor" stroke-width="1.5"/><text x="180" y="214" text-anchor="middle" font-weight="600">PC-C</text><text x="180" y="230" text-anchor="middle" font-size="10">gateway .1</text>
+        </g>
+      </svg>
+      <figcaption>Figure 2. The what-if at HQ, for VLAN 10. PC-C's gateway is still <code>192.168.10.1</code>, but that's now the virtual router's address. D1 moves to <code>.2</code> and forwards as the active router; D2 at <code>.3</code> watches its hellos.</figcaption>
+    </figure>
+    <h3 class="sub">Who becomes active: priority and preemption</h3>
+    <ul class="obj-list">
+      <li><strong>Highest priority wins.</strong> The default is 100, and the range is 0–255. Set it with <code>standby priority</code>.</li>
+      <li><strong>On a tie, the highest IPv4 address wins.</strong> Leaving the choice to that is leaving it to chance: set the priority.</li>
+      <li><strong>Once a router is active, it stays active</strong>, even if a router with a higher priority comes online later. With no preemption, the router that boots first simply wins.</li>
+      <li><strong><code>standby preempt</code></strong> lets a higher-priority router take the active role back. It only works on priority: a router with the same priority and a higher address won't preempt.</li>
+    </ul>
+    <h3 class="sub">States and timers</h3>
+    <table class="spec">
+      <thead><tr><th>State</th><th>What the router is doing</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Initial</strong></td><td>Just started: HSRP was configured, or the interface just came up</td></tr>
+        <tr><td><strong>Learn</strong></td><td>Doesn't know the virtual IP yet and hasn't heard the active router. Waiting.</td></tr>
+        <tr><td><strong>Listen</strong></td><td>Knows the virtual IP, but is neither active nor standby. Listens to the hellos.</td></tr>
+        <tr><td><strong>Speak</strong></td><td>Sends hellos and takes part in the election</td></tr>
+        <tr><td><strong>Standby</strong></td><td>Next in line. Sends hellos and watches the active router.</td></tr>
+        <tr><td><strong>Active</strong></td><td>Forwards traffic sent to the virtual IP and MAC</td></tr>
+      </tbody>
+    </table>
+    <ul class="obj-list">
+      <li><strong>Hello every 3 seconds</strong> to the group's multicast address, from the active and the standby router.</li>
+      <li><strong>Hold time 10 seconds.</strong> If the standby hears nothing from the active router for 10 seconds, it becomes active.</li>
+      <li>Both can be shortened for faster failover, but not below 1 second for hellos or 4 for the hold time: shorter timers cost CPU and can cause needless changes of role.</li>
+    </ul>
+    <h3 class="sub">What it would look like at HQ</h3>
+    <p>Module 9 is a concepts module: it names <code>standby priority</code> and <code>standby preempt</code>, and NetAcad's HSRP Packet Tracer activity walks through the rest. Here's the what-if, so the commands have a shape. It isn't added to the course network.</p>
+        <table class="spec">
+      <thead><tr><th></th><th>VLAN 10</th><th>VLAN 30 (/26)</th></tr></thead>
+      <tbody>
+        <tr><td>Virtual IP (what hosts use)</td><td><strong>192.168.10.1</strong>, unchanged</td><td><strong>192.168.30.1</strong>, unchanged</td></tr>
+        <tr><td>D1</td><td>.2, priority 150, preempt</td><td>.2, priority 150, preempt</td></tr>
+        <tr><td>D2</td><td>.3, priority 100 (default)</td><td>.3, priority 100 (default)</td></tr>
+        <tr><td>HSRP group, version</td><td>10, version 2</td><td>30, version 2</td></tr>
+        <tr><td>Virtual MAC</td><td><code>0000.0c9f.f00a</code></td><td><code>0000.0c9f.f01e</code></td></tr>
+      </tbody>
+    </table>
+    <ul class="obj-list">
+      <li><strong>Version 2</strong>, as NetAcad&#x27;s HSRP activity uses: it supports IPv6 and more groups. Its virtual MAC is <code>0000.0c9f.f</code> plus the group number in three hex digits (10 is <code>00a</code>, 30 is <code>01e</code>). Version 1, the Cisco IOS default if no version is typed, uses <code>0000.0c07.ac</code> plus two hex digits, so group 10 would be <code>0000.0c07.ac0a</code>.</li>
+      <li><strong>Group number = VLAN number</strong> is common practice: it makes a mismatch easy to spot.</li>
+      <li><strong>The DHCP pools don&#x27;t change.</strong> <code>default-router 192.168.10.1</code> is now the virtual address. As Session 3 put it, a gateway is an address, not a box.</li>
+    </ul>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">D1 · its own address moves to .2; the virtual IP keeps .1</span></div>
+      <div class="terminal-body"><span class="prompt">D1(config)#</span> <span class="cmd">interface vlan 10</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">ip address 192.168.10.2 255.255.255.0</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">standby version 2</span>
+<span class="prompt">D1(config-if)#</span> <span class="hl">standby 10 ip 192.168.10.1</span>
+<span class="prompt">D1(config-if)#</span> <span class="hl">standby 10 priority 150</span>
+<span class="prompt">D1(config-if)#</span> <span class="hl">standby 10 preempt</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">exit</span>
+<span class="prompt">D1(config)#</span> <span class="cmd">interface vlan 30</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">ip address 192.168.30.2 255.255.255.192</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">standby version 2</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">standby 30 ip 192.168.30.1</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">standby 30 priority 150</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">standby 30 preempt</span>
+<span class="prompt">D1(config-if)#</span> <span class="cmd">end</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong>The SVI&#x27;s own address moves off .1 first:</strong> the virtual IP can&#x27;t be the interface&#x27;s own address. On a live network, that&#x27;s a short outage.</li>
+      <li><strong>Preempt only on D1,</strong> because only D1 should take the role back. A router with preempt only takes over if its priority is higher.</li>
+      <li><strong>D1&#x27;s relay keeps working.</strong> Its relayed requests now carry giaddr <code>192.168.10.2</code>, still inside VLAN 10&#x27;s subnet, so R1 still picks the right pool.</li>
+    </ul>
+
+        <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">D2 · the standby gateway</span></div>
+      <div class="terminal-body"><span class="prompt">D2(config)#</span> <span class="cmd">ip routing</span>
+<span class="prompt">D2(config)#</span> <span class="cmd">interface vlan 10</span>
+<span class="prompt">D2(config-if)#</span> <span class="cmd">ip address 192.168.10.3 255.255.255.0</span>
+<span class="prompt">D2(config-if)#</span> <span class="cmd">standby version 2</span>
+<span class="prompt">D2(config-if)#</span> <span class="hl">standby 10 ip 192.168.10.1</span>
+<span class="prompt">D2(config-if)#</span> <span class="cmd">no shutdown</span>
+<span class="prompt">D2(config-if)#</span> <span class="cmd">exit</span>
+<span class="prompt">D2(config)#</span> <span class="cmd">interface vlan 30</span>
+<span class="prompt">D2(config-if)#</span> <span class="cmd">ip address 192.168.30.3 255.255.255.192</span>
+<span class="prompt">D2(config-if)#</span> <span class="cmd">standby version 2</span>
+<span class="prompt">D2(config-if)#</span> <span class="cmd">standby 30 ip 192.168.30.1</span>
+<span class="prompt">D2(config-if)#</span> <span class="cmd">no shutdown</span>
+<span class="prompt">D2(config-if)#</span> <span class="cmd">end</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong>No priority or preempt lines:</strong> D2 runs on the defaults. The what-if also assumes D2 has VLANs 10 and 30 and is trunked to S1 and S2 the way D1 is; that cabling isn&#x27;t shown.</li>
+      <li><strong>DHCP is the catch.</strong> D2&#x27;s SVIs would need their own <code>ip helper-address</code>, or new HQ clients get nothing while D2 is the gateway. And <code>10.0.0.9</code> is the wrong target: it&#x27;s R1&#x27;s end of the <em>D1</em> link, and it goes down with D1. D2 needs its own link to R1, and designing that is beyond this module. HSRP saves the gateway; DHCP and the way off-site survive only if D2 has its own way out. (Existing leases last a day, so they ride out a failure anyway.)</li>
+      <li><strong>This what-if is IPv4 only.</strong> PC-C&#x27;s IPv6 gateway is still <code>FE80::1</code>, from D1&#x27;s RAs. HSRP for IPv6 would protect that.</li>
+    </ul>
+
+        <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">D1 · Active for both VLANs</span></div>
+      <div class="terminal-body"><span class="prompt">D1#</span> <span class="cmd">show standby brief</span>
+<span class="out">                     P indicates configured to preempt.</span>
+<span class="out">                     |</span>
+<span class="out">Interface   Grp  Pri P State   Active          Standby         Virtual IP</span>
+<span class="hl">Vl10        10   150 P Active  local           192.168.10.3    192.168.10.1</span>
+<span class="out">Vl30        30   150 P Active  local           192.168.30.3    192.168.30.1</span></div>
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">D2 · Standby, waiting</span></div>
+      <div class="terminal-body"><span class="prompt">D2#</span> <span class="cmd">show standby brief</span>
+<span class="out">                     P indicates configured to preempt.</span>
+<span class="out">                     |</span>
+<span class="out">Interface   Grp  Pri P State   Active          Standby         Virtual IP</span>
+<span class="hl">Vl10        10   100   Standby 192.168.10.2    local           192.168.10.1</span>
+<span class="out">Vl30        30   100   Standby 192.168.30.2    local           192.168.30.1</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong>Read one row across:</strong> group, priority, <strong>P</strong> (preempt configured), this switch&#x27;s state, who&#x27;s active, who&#x27;s standby, the virtual IP. <code>local</code> means "this switch".</li>
+      <li><strong>The two outputs mirror each other.</strong> D1 names D2&#x27;s real address as standby, and D2 names D1&#x27;s as active. Neither lists the virtual IP as a router.</li>
+    </ul>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">D1 · the detailed view</span></div>
+      <div class="terminal-body"><span class="prompt">D1#</span> <span class="cmd">show standby vlan 10</span>
+<span class="hl">Vlan10 - Group 10 (version 2)</span>
+<span class="hl">  State is Active</span>
+<span class="out">    2 state changes, last state change 00:04:12</span>
+<span class="out">  Virtual IP address is 192.168.10.1</span>
+<span class="hl">  Active virtual MAC address is 0000.0c9f.f00a (MAC In Use)</span>
+<span class="out">    Local virtual MAC address is 0000.0c9f.f00a (v2 default)</span>
+<span class="hl">  Hello time 3 sec, hold time 10 sec</span>
+<span class="out">    Next hello sent in 1.872 secs</span>
+<span class="out">  Preemption enabled</span>
+<span class="out">  Active router is local</span>
+<span class="out">  Standby router is 192.168.10.3, priority 100 (expires in 9.344 sec)</span>
+<span class="out">  Priority 150 (configured 150)</span>
+<span class="out">  Group name is &quot;hsrp-Vl10-10&quot; (default)</span></div>
+    </div>
+
+        <p>And from PC-C&#x27;s side, after a ping to PC-D:</p>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">PC-C · the gateway is a virtual MAC</span></div>
+      <div class="terminal-body"><span class="prompt">C:\&gt;</span> <span class="cmd">ipconfig</span>
+<span class="out">...</span>
+<span class="out">   IPv4 Address....................: 192.168.10.101</span>
+<span class="out">   Subnet Mask.....................: 255.255.255.0</span>
+<span class="out">   Default Gateway.................: FE80::1</span>
+<span class="hl">                                     192.168.10.1</span>
+
+<span class="prompt">C:\&gt;</span> <span class="cmd">arp -a</span>
+<span class="out">  Internet Address      Physical Address      Type</span>
+<span class="hl">  192.168.10.1          0000.0c9f.f00a        dynamic</span></div>
+    </div>
+    <p>PC-C changed nothing: the same gateway, from the same DHCPv4 pool. But its ARP entry for <code>.1</code> is the <strong>virtual</strong> MAC, not D1&#x27;s own.</p>
+
+  </section>
+
+  <!-- FAILOVER -->
+  <section id="failover">
+    <div class="section-head">
+      <p class="kicker">Module 9.2</p>
+      <h2>Failover: the front door closes</h2>
+      <p>Back to the cold open: D1 goes dark. With one gateway, Front Desk would be cut off until someone fixed it. With HSRP, the gateway is back in about ten seconds. In this what-if that gets Front Desk as far as D2 can reach: the other HQ VLAN, but not off-site.</p>
+    </div>
+        <p>D1 loses power. D2 hears no hello for the 10-second hold time, and takes over both groups:</p>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">D2 · about 10 seconds after D1 lost power</span></div>
+      <div class="terminal-body"><span class="hl">%HSRP-5-STATECHANGE: Vlan10 Grp 10 state Standby -&gt; Active</span>
+<span class="out">%HSRP-5-STATECHANGE: Vlan30 Grp 30 state Standby -&gt; Active</span>
+
+<span class="prompt">D2#</span> <span class="cmd">show standby brief</span>
+<span class="out">                     P indicates configured to preempt.</span>
+<span class="out">                     |</span>
+<span class="out">Interface   Grp  Pri P State   Active          Standby         Virtual IP</span>
+<span class="hl">Vl10        10   100   Active  local           unknown         192.168.10.1</span>
+<span class="out">Vl30        30   100   Active  local           unknown         192.168.30.1</span></div>
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">PC-C · pinging PC-D across the failover</span></div>
+      <div class="terminal-body"><span class="prompt">C:\&gt;</span> <span class="cmd">ping -t 192.168.30.10</span>
+
+<span class="out">Reply from 192.168.30.10: bytes=32 time&lt;1ms TTL=127</span>
+<span class="out">Reply from 192.168.30.10: bytes=32 time&lt;1ms TTL=127</span>
+<span class="out">Request timed out.</span>
+<span class="out">Request timed out.</span>
+<span class="out">Request timed out.</span>
+<span class="hl">Reply from 192.168.30.10: bytes=32 time&lt;1ms TTL=127</span>
+<span class="out">...</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong>A few seconds of loss, then replies again.</strong> The gap is about the hold time, not instant.</li>
+      <li><strong>PC-C&#x27;s ARP entry doesn&#x27;t change.</strong> D2 now answers for the same virtual MAC, and tells the switches where that MAC lives now. That&#x27;s NetAcad&#x27;s "no disruption" point, minus a few lost packets.</li>
+      <li><strong><code>Standby unknown</code></strong> means there&#x27;s no backup any more: D2 is on its own.</li>
+      <li><strong>S1 and S2 also lose their root bridge</strong>, so STP reconverges at the same time: quickly, with Rapid PVST+, and S1 becomes root as the secondary.</li>
+      <li><strong>Why the test is PC-D, not SRV1:</strong> D2 can route between its own two SVIs, but in this what-if it has no way off-site.</li>
+    </ul>
+    <h3 class="sub">D1 comes back</h3>
+    <p>When D1 is powered back on, it hears D2&#x27;s hellos, sees that its own priority (150) is higher than D2&#x27;s (100), and, because it&#x27;s set to preempt, takes the active role back. D2 drops back to standby. <code>show standby brief</code> on D1 looks just like it did before the failure. Without <code>standby 10 preempt</code>, D1 would sit as standby until D2 failed.</p>
+    <div class="teach-note">
+      <span class="label">Why the whole of D1, and not one SVI</span>
+      If only D1&#x27;s Vlan10 SVI went down, VLAN 10 would move to D2 while VLAN 30 stayed on D1. Replies from VLAN 30 to VLAN 10 would then reach D1, which no longer has a VLAN 10 interface, and would bounce between D1 and R1 until they expired. Real networks prevent that with HSRP interface tracking, which is beyond this course. Failing the whole switch keeps the example clean.
+    </div>
+
+  </section>
+
+  <!-- MISTAKES -->
+  <section id="mistakes">
+    <div class="section-head">
+      <p class="kicker">Watch for this</p>
+      <h2>Common Module 8 and 9 mistakes</h2>
+      <p>Most Module 8 faults are an RA flag that says one thing while the server says another. Most HSRP faults are a router that's ready to take over but never does.</p>
+    </div>
+        <h3 class="sub">1 · A pool with no <code>ipv6 dhcp server</code></h3>
+    <p>The O flag is set, PC-B asks, and nobody answers: its IPv6 DNS stays <code>::</code>. A DHCPv6 pool has to be bound to the interface. <code>show ipv6 dhcp interface g0/0/1</code> should say <code>in server mode</code> and name the pool.</p>
+    <h3 class="sub">2 · A bound pool with no O flag</h3>
+    <p>The server is ready, but the RA never tells hosts to ask. <code>show ipv6 interface g0/0/1</code> has no "Hosts use DHCP to obtain other configuration" line.</p>
+    <h3 class="sub">3 · M without <code>no-autoconfig</code></h3>
+    <p>Hosts end up with two global addresses, one built and one leased. The trap: <code>show ipv6 interface</code> still says "Hosts use DHCP to obtain routable addresses", because that line follows the M flag, not A. Look for the <code>ipv6 nd prefix default no-autoconfig</code> line in <code>show running-config interface g0/0/1</code>.</p>
+    <h3 class="sub">4 · Flags on the wrong router</h3>
+    <p>The flags belong to the router whose RAs the hosts hear: R2 for Shipping, D1 for HQ. Setting them on a DHCPv6 server on another network changes nothing for the hosts.</p>
+    <h3 class="sub">5 · Looking for a gateway in DHCPv6</h3>
+    <p>There&#x27;s no <code>default-router</code> in a DHCPv6 pool. The IPv6 gateway always comes from the RA. If a host has no IPv6 gateway, check the router&#x27;s RAs, starting with <code>ipv6 unicast-routing</code> (<code>FF02::2</code> missing from <code>show ipv6 interface</code>).</p>
+    <h3 class="sub">6 · Expecting a stateless server to list bindings</h3>
+    <p>An empty <code>show ipv6 dhcp binding</code> on a stateless server is correct. Check the host&#x27;s <code>ipconfig /all</code> instead.</p>
+    <h3 class="sub">7 · Priority without preempt</h3>
+    <p>D1 has priority 150, fails, and comes back as standby, while D2 stays active. <code>show standby brief</code> on D1 has no <code>P</code>. Add <code>standby 10 preempt</code>.</p>
+    <h3 class="sub">8 · Equal priorities, and a surprise after a power cut</h3>
+    <p>With no priority set, the router that comes up first stays active. After both restart together, the highest address wins: D2 (<code>.3</code>). Both show <code>Pri 100</code>. Set the priority, rather than leaving it to timing.</p>
+    <h3 class="sub">9 · Mismatched groups, or versions</h3>
+    <p>Group 10 on D1, group 1 on D2, or version 2 on one and version 1 on the other: they never hear each other, so both go active, with standby <code>unknown</code>. Compare <code>show standby vlan 10</code> on each.</p>
+    <h3 class="sub">10 · Hosts pointed at a real address</h3>
+    <p>A host whose gateway is D1&#x27;s own <code>.2</code>, not the virtual <code>.1</code>, loses its gateway when D1 fails, however well HSRP works. Check <code>ipconfig</code> and the DHCP pool&#x27;s <code>default-router</code>.</p>
+
+  </section>
+
+  <!-- WHAT WORKS NOW -->
+  <section id="reach">
+    <div class="section-head">
+      <p class="kicker">End of session</p>
+      <h2>What works now, and what doesn't</h2>
+      <p>The routing and switching haven't changed. Shipping's IPv6 hosts now get a DNS server, and HQ still has a single gateway.</p>
+    </div>
+        <table class="spec">
+      <thead><tr><th>Test</th><th>Result</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Everything that worked at the end of Session 6</td><td><strong>Works</strong></td><td>No routing or switching change today</td></tr>
+        <tr><td>PC-B&#x27;s IPv6 address</td><td>SLAAC, from R2&#x27;s RAs</td><td>Stateful was shown, then rolled back</td></tr>
+        <tr><td>PC-B&#x27;s IPv6 DNS server</td><td><strong><code>2001:db8:acad:20::100</code></strong></td><td>R2&#x27;s stateless DHCPv6 pool, and the O flag</td></tr>
+        <tr><td>R2 <code>show ipv6 dhcp binding</code></td><td>Empty</td><td>Stateless keeps no bindings</td></tr>
+        <tr><td>HQ hosts&#x27; IPv6</td><td>Plain SLAAC from D1; no IPv6 DNS server</td><td>Unchanged. They resolve names over IPv4 DNS from DHCPv4.</td></tr>
+        <tr><td>HQ&#x27;s gateway if D1 fails</td><td><strong>Still no</strong></td><td>D2 was a what-if. The course network still has one D1.</td></tr>
+        <tr><td>Protection against a rogue DHCP server</td><td><strong>None</strong></td><td>Session 9: DHCP snooping</td></tr>
+      </tbody>
+    </table>
+
+    <div class="teach-note preview">
+      <span class="label">Coming up in Session 8</span>
+      The module-group exam on Modules 7–9, then Module 10: everything that can go wrong at Layer 2 on purpose. MAC flooding, VLAN hopping, a rogue DHCP server, ARP spoofing. The network works. Now someone's trying to break it.
+    </div>
+  </section>
+
+  <!-- THE TICKET -->
+  <section id="ticket">
+    <div class="section-head">
+      <p class="kicker">Recurring segment</p>
+      <h2>The Ticket</h2>
+      <p>Turn it into steps before you open the answer.</p>
+    </div>
+        <div class="ticket-card">
+      <p class="tag">Ticket #141-07 · Priority: normal · From: Compliance</p>
+      <p>We need a record of which device had which IPv6 address on the Shipping LAN. Someone already "turned on DHCPv6" on R2 last week, but when we asked for the list, the record was empty. Please fix it.</p>
+    </div>
+    <details class="solution"><summary>One way to break it down</summary><div class="solbody">
+      <ol>
+        <li><strong>"Turned on DHCPv6" but the record&#x27;s empty</strong>: that&#x27;s stateless DHCPv6 working as designed. A stateless server keeps no bindings. Nothing is broken; the request needs a different method.</li>
+        <li>A record of addresses means the server must <em>lease</em> them: <strong>stateful DHCPv6</strong>.</li>
+        <li>On R2: a pool with an <code>address prefix</code> (a /80 inside <code>2001:db8:acad:20::/64</code> keeps leases away from R2 and SRV1), the DNS server and domain, bound to G0/0/1 in place of the stateless pool.</li>
+        <li>On G0/0/1: <code>ipv6 nd managed-config-flag</code> (M=1) and <code>ipv6 nd prefix default no-autoconfig</code> (A=0), or every PC keeps an unrecorded SLAAC address too.</li>
+        <li>Restart each PC&#x27;s network connection, or the old SLAAC addresses linger (unrecorded) until they age out.</li>
+        <li>Verify: <code>show ipv6 dhcp binding</code> lists each PC; <code>ipconfig /all</code> shows one global address starting <code>…:20:aaaa:</code>; the gateway is still <code>FE80::2</code>.</li>
+        <li>Tell Compliance what the record holds: each client&#x27;s DUID and link-local address, and the leased address, not its MAC. It&#x27;s a list of current leases, not a history: a lasting record needs the router&#x27;s DHCPv6 events logged, which is beyond this course.</li>
+      </ol>
+    </div></details>
+
+  </section>
+
+  <!-- CHECKPOINT -->
+  <section id="checkpoint">
+    <div class="section-head">
+      <p class="kicker">Before Session 8</p>
+      <h2>Checkpoint: Modules 8 and 9</h2>
+      <p>If you can do these cold, you're ready for the Modules 7–9 exam.</p>
+    </div>
+    <ul class="obj-list">
+      <li>The A, O and M flags: what each means, its default, and the flags for each of the three methods</li>
+      <li>Where an IPv6 host's gateway comes from, whichever method it uses</li>
+      <li>RS and RA: who sends each, to which multicast group, and how often</li>
+      <li>EUI-64 vs random interface IDs, and what DAD does with an NS and an NA</li>
+      <li>SOLICIT, ADVERTISE, REQUEST, REPLY; UDP 546 and 547; what "stateless" means for the server</li>
+      <li>A stateless and a stateful DHCPv6 server from memory, including <code>ipv6 nd other-config-flag</code>, <code>ipv6 nd managed-config-flag</code> and <code>ipv6 nd prefix default no-autoconfig</code></li>
+      <li><code>ipv6 address autoconfig</code> vs <code>ipv6 address dhcp</code>; <code>ipv6 dhcp relay destination</code>; <code>show ipv6 dhcp pool</code>, <code>binding</code> and <code>interface</code></li>
+      <li>Why a single gateway is a single point of failure, and what a virtual router shares</li>
+      <li>HSRP: active and standby, default priority 100, the tie-breaker, preemption, the states, and hello 3 s / hold 10 s</li>
+      <li>HSRP, VRRP, GLBP and IRDP: one line each</li>
+    </ul>
+  </section>
+
+  <!-- FLASHCARDS -->
+  <section id="flashcards">
+    <div class="section-head">
+      <p class="kicker">Study</p>
+      <h2>Flashcards</h2>
+      <p>Click to flip. Double-click to mark as known.</p>
+    </div>
+    <div class="toolbar">
+      <button class="btn" id="shuffleBtn">Shuffle</button>
+      <button class="btn" id="resetKnownBtn">Reset progress</button>
+      <span id="cardProgress"></span>
+    </div>
+    <div class="card-grid" id="cardGrid"></div>
+  </section>
+
+  <!-- QUIZ -->
+  <section id="quiz">
+    <div class="section-head">
+      <p class="kicker">Check yourself</p>
+      <h2>Sample questions</h2>
+      <p>Pick an answer to see if you're right. Same style as the module-group exam.</p>
+    </div>
+    <div id="quizScore"></div>
+    <div id="quizList"></div>
+    <button class="btn" id="resetQuizBtn">Reset quiz</button>
+  </section>
+
+  <!-- EXAMPLES -->
+  <section id="examples">
+    <div class="section-head">
+      <p class="kicker">Applied</p>
+      <h2>Worked examples</h2>
+      <p>Think it through before you expand the answer.</p>
+    </div>
+        <div class="example">
+      <span class="tag">Reading the RA</span>
+      <h3>What does this line mean?</h3>
+      <p><code>show ipv6 interface g0/0/1</code> on a router ends with <code>Hosts use stateless autoconfig for addresses.</code> and nothing about DHCP. Which method are its hosts using, and what are the flags?</p>
+      <details class="solution"><summary>Show answer</summary><div class="solbody">
+        <p><strong>SLAAC only</strong>: A=1, O=0, M=0, the default once <code>ipv6 unicast-routing</code> is on. With the O flag set, a second line would say hosts use DHCP for other configuration; with M set, the line would say DHCP is used for addresses.</p>
+      </div></details>
+    </div>
+    <div class="example">
+      <span class="tag">Gateway</span>
+      <h3>Where did fe80::2 come from?</h3>
+      <p>R2 is a stateful DHCPv6 server, and PC-B's <code>ipconfig /all</code> shows an IPv6 address from it. The R2 pool has no gateway line in it at all, but PC-B's default gateway is <code>fe80::2</code>. Where did PC-B get it?</p>
+      <details class="solution"><summary>Show answer</summary><div class="solbody">
+        <p>From R2's <strong>RA</strong>. Every RA is sent from the router's link-local address, and hosts use that address as their IPv6 gateway. DHCPv6 has no default-router option, so a DHCPv6 pool can't set one: that's the difference from DHCPv4.</p>
+      </div></details>
+    </div>
+    <div class="example">
+      <span class="tag">Flags</span>
+      <h3>Why two addresses?</h3>
+      <p>Someone sets up stateful DHCPv6 on a router with <code>ipv6 nd managed-config-flag</code> and a pool with an <code>address prefix</code>. The hosts now each have <em>two</em> global addresses in the same /64. Why?</p>
+      <details class="solution"><summary>Show answer</summary><div class="solbody">
+        <p>The A flag is still 1. The hosts follow both instructions: A=1 says build a SLAAC address, and M=1 says lease one from DHCPv6. <code>ipv6 nd prefix default no-autoconfig</code> sets A to 0, so hosts stop building one. An existing SLAAC address isn&#x27;t withdrawn: it ages out, or disappears when the host reconnects.</p>
+      </div></details>
+    </div>
+    <div class="example">
+      <span class="tag">Stateless</span>
+      <h3>Where are the bindings?</h3>
+      <p>R2 is running stateless DHCPv6, and PC-B has received its DNS server from it. <code>show ipv6 dhcp binding</code> on R2 is empty. Is something broken?</p>
+      <details class="solution"><summary>Show answer</summary><div class="solbody">
+        <p>No. A stateless server only hands out settings. It leases no addresses, so it has nothing to record. Check <code>ipconfig /all</code> on PC-B instead: the IPv6 DNS server is there.</p>
+      </div></details>
+    </div>
+    <div class="example">
+      <span class="tag">Election</span>
+      <h3>Who's active?</h3>
+      <p>D1 (<code>.2</code>) and D2 (<code>.3</code>) both run HSRP on VLAN 10 with the default priority and no preemption. They boot at the same moment. Who's active? Then D1 is given priority 150, without preempt. Does anything change?</p>
+      <details class="solution"><summary>Show answer</summary><div class="solbody">
+        <p>With equal priority, the <strong>highest IPv4 address</strong> wins: D2 (<code>.3</code>). Giving D1 priority 150 changes nothing while D2 is up: without preemption, the active router stays active. D1 takes over only if D2 fails, or once <code>standby preempt</code> is added on D1.</p>
+      </div></details>
+    </div>
+    <div class="example">
+      <span class="tag">Timers</span>
+      <h3>How long is Front Desk cut off?</h3>
+      <p>D1 is active for VLAN 10, with the default timers, and loses power. Roughly how long before D2 forwards for <code>192.168.10.1</code>? Does PC-C need a new gateway address or a new ARP entry?</p>
+      <details class="solution"><summary>Show answer</summary><div class="solbody">
+        <p>Up to the <strong>10-second hold time</strong>: D2 takes over when it has heard no hello from D1 for 10 seconds (hellos come every 3). PC-C changes nothing. D2 takes over the virtual IP <em>and</em> the virtual MAC, so PC-C's gateway and its ARP entry are still right.</p>
+      </div></details>
+    </div>
+
+  </section>
+
+  <!-- GLOSSARY -->
+  <section id="glossary">
+    <div class="section-head">
+      <p class="kicker">Reference</p>
+      <h2>Glossary &amp; index</h2>
+      <p>Every term from this session. Search, or jump by letter.</p>
+    </div>
+    <input type="text" id="glossarySearch" placeholder="Search terms…" aria-label="Search glossary">
+    <div class="alpha-nav" id="alphaNav"></div>
+    <dl class="glossary" id="glossaryList"></dl>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>IT141 · CCNA: Switching, Routing, and Wireless Essentials · Session 7 reference.</p>
+    <p class="license-note">© 2026 Zan Dick (<a href="https://github.com/KevinSays/osi-company-switching">KevinSays</a>), Mountwest Community &amp; Technical College · Content: <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/">CC BY-NC-SA 4.0</a> · Code: <a href="https://github.com/KevinSays/osi-company-switching/blob/main/LICENSE">MIT</a> · Cisco, NetAcad, CCNA and Packet Tracer are trademarks of Cisco; this site is not affiliated with or endorsed by Cisco.</p>
+  </div>
+</footer>
+<button id="backToTop" class="back-to-top" aria-label="Back to top" title="Back to top">↑</button>
+<script>
+  (function(){
+    /* ---- which method? (RA flags) ---- */
+    const OPT = { O:'ipv6 nd other-config-flag', M:'ipv6 nd managed-config-flag', N:'ipv6 nd prefix default no-autoconfig' };
+    const ANS = ['SLAAC only', 'SLAAC + stateless DHCPv6', 'Stateful DHCPv6 only', 'Two global addresses', 'Link-local only'];
+    function judge(c){
+      const A = c.N ? 0 : 1, O = c.O ? 1 : 0, M = c.M ? 1 : 0;
+      const flags = `A=${A}, O=${O}, M=${M}`;
+      if (M && A) return [ANS[3], `${flags}. The A flag is still 1, so the host builds a SLAAC address, <em>and</em> M=1 sends it to the DHCPv6 server for a second one. To make it stateful only, add <code>${OPT.N}</code>.`];
+      if (M) return [ANS[2], `${flags}. No SLAAC; the address, DNS and domain all come from the stateful server.${O ? ' The O flag adds nothing once M is set: a stateful server sends the other settings anyway.' : ''} The gateway still comes from the RA.`];
+      if (!A) return [ANS[4], `${flags}. A=0 says "don't build an address", and M=0 says "don't lease one" either. The host has only its <code>fe80::</code> address${O ? ', plus whatever settings a stateless server sends' : ''}, though it still learns a gateway from the RA, with no global address to use it.`];
+      if (O) return [ANS[1], `${flags}. SLAAC for the address, and a stateless DHCPv6 server for DNS and the domain name.`];
+      return [ANS[0], `${flags}: the default once <code>ipv6 unicast-routing</code> is on. The host builds its address from the RA's prefix; nothing asks a DHCPv6 server.`];
+    }
+    const caseEl = document.getElementById('raCase'), btns = document.getElementById('raBtns'),
+          out = document.getElementById('raOut'), scoreEl = document.getElementById('raScore');
+    if (!caseEl) return;
+    const COMMON = [{}, {O:1}, {M:1,N:1}, {M:1,N:1,O:1}, {M:1}];
+    let right = 0, done = 0, n = 0;
+    function show(){
+      n++;
+      const c = Math.random() < 0.7 ? COMMON[Math.floor(Math.random()*COMMON.length)]
+                                    : { O: Math.random() < 0.5, M: Math.random() < 0.5, N: Math.random() < 0.5 };
+      const [res, why] = judge(c);
+      const lines = ['O','M','N'].filter(k => c[k]).map(k => ' ' + OPT[k]);
+      if (!lines.length) lines.push(' ! no ipv6 nd lines');
+      caseEl.innerHTML = `<span class="count">Interface ${n}</span><code style="display:block; white-space:pre; overflow-x:auto; font-size:.8rem; line-height:1.7; background:none; padding:0;">interface g0/0/1\n${lines.join('\n')}</code>`;
+      out.innerHTML = ''; btns.innerHTML = ''; delete btns.dataset.done;
+      ANS.forEach(k => {
+        const el = document.createElement('button');
+        el.className = 'choice'; el.textContent = k;
+        el.addEventListener('click', () => {
+          if (btns.dataset.done) return;
+          btns.dataset.done = '1'; done++;
+          if (k === res) right++;
+          Array.from(btns.children).forEach(x => {
+            x.disabled = true;
+            if (x.textContent === res) x.classList.add('correct');
+            else if (x.textContent === k) x.classList.add('incorrect');
+          });
+          out.innerHTML = `<div class="row"><b>${k === res ? 'Right' : 'Not quite: ' + res}</b><span>${why}</span></div>`;
+          scoreEl.textContent = `${right} / ${done} right`;
+        });
+        btns.appendChild(el);
+      });
+    }
+    document.getElementById('raNext').addEventListener('click', show);
+    show();
+  })();
+  const TERMS = [
+    {t:"A flag", d:"Address Autoconfiguration flag in an RA. Set to 1 (the default), it tells hosts to build their own global address from the RA's prefix: SLAAC."},
+    {t:"Active router", d:"The HSRP router that forwards traffic sent to the virtual IP and MAC address."},
+    {t:"address prefix", d:"DHCPv6 pool command that gives a stateful pool its addresses, such as address prefix 2001:db8:acad:20:aaaa::/80. A stateless pool has none."},
+    {t:"DAD", d:"Duplicate Address Detection: before using an IPv6 address, a host sends a Neighbor Solicitation for it. An answering Neighbor Advertisement means someone already has it."},
+    {t:"DHCPv6 ADVERTISE", d:"A DHCPv6 server's answer to a SOLICIT: I can serve you. Sent to the client on UDP 546."},
+    {t:"DHCPv6 INFORMATION-REQUEST", d:"A stateless client's request for settings only (DNS server, domain name), because it already has an address. The server answers with a REPLY."},
+    {t:"DHCPv6 relay agent", d:"A router interface that forwards DHCPv6 messages from clients to a server on another network. Configured with ipv6 dhcp relay destination."},
+    {t:"DHCPv6 REPLY", d:"The server's final DHCPv6 message: the address (if stateful) and the other settings. It never includes a default gateway."},
+    {t:"DHCPv6 REQUEST", d:"A client's request to the server it chose, after an ADVERTISE: send me the address and settings."},
+    {t:"DHCPv6 SOLICIT", d:"A client's first DHCPv6 message, sent from its link-local address to ff02::1:2 on UDP 547: is there a DHCPv6 server out there?"},
+    {t:"dns-server (DHCPv6)", d:"DHCPv6 pool command that sets the IPv6 DNS server address handed to clients."},
+    {t:"domain-name (DHCPv6)", d:"DHCPv6 pool command that sets the DNS domain name handed to clients, such as it141.example."},
+    {t:"DUID", d:"DHCP unique identifier: how a DHCPv6 client (or server) identifies itself. It's often built from a MAC address, but it isn't one. A stateful server's bindings list each client's DUID."},
+    {t:"EUI-64", d:"A way to build a 64-bit interface ID from a 48-bit MAC address: split it, insert fffe in the middle, and flip the seventh bit. Cisco routers use it for their link-local addresses."},
+    {t:"ff02::1:2", d:"The all-DHCPv6-relay-agents-and-servers multicast group. DHCPv6 clients send their SOLICIT and INFORMATION-REQUEST messages to it."},
+    {t:"FHRP", d:"First-hop redundancy protocol: a protocol that lets two or more routers share a virtual gateway address, so hosts keep a working gateway if one router fails. HSRP, VRRP and GLBP are FHRPs."},
+    {t:"First-hop redundancy", d:"A network's ability to recover from the failure of the device acting as hosts' default gateway."},
+    {t:"GLBP", d:"Gateway Load Balancing Protocol: Cisco's FHRP that adds load balancing, so every router in the group forwards some traffic. GLBP for IPv6 does the same for IPv6."},
+    {t:"GUA", d:"Global unicast address: an IPv6 address that can be routed on the internet. This site's examples use 2001:db8::/32, the range reserved for documentation, with LANs at 2001:db8:acad:N::/64."},
+    {t:"Hello (HSRP)", d:"The message active and standby HSRP routers send every 3 seconds by default. If the standby hears none for the 10-second hold time, it takes over."},
+    {t:"HSRP", d:"Hot Standby Router Protocol: Cisco's FHRP. One active router forwards for the virtual IP and MAC; one standby router takes over if it fails. HSRP for IPv6 does the same for IPv6."},
+    {t:"HSRP states", d:"Initial, Learn, Listen, Speak, Standby and Active: the stages an HSRP router moves through as it joins a group."},
+    {t:"Interface ID", d:"The last 64 bits of an IPv6 address on a /64. Under SLAAC the host makes it, either with EUI-64 or at random."},
+    {t:"ipv6 address autoconfig", d:"Interface command that makes a router interface use SLAAC for its global address, like a host."},
+    {t:"ipv6 address dhcp", d:"Interface command that makes a router interface a stateful DHCPv6 client: it leases its global address from a DHCPv6 server."},
+    {t:"ipv6 dhcp pool", d:"Global command that creates a named DHCPv6 pool and enters its configuration mode, where dns-server, domain-name and (for stateful) address prefix are set."},
+    {t:"ipv6 dhcp relay destination", d:"Interface command, on the interface facing the clients, that makes it a DHCPv6 relay agent to the server address given. The outgoing interface is needed too if that address is link-local."},
+    {t:"ipv6 dhcp server", d:"Interface command that binds a DHCPv6 pool to an interface, so the router answers DHCPv6 clients on that link from that pool."},
+    {t:"ipv6 enable", d:"Interface command that gives an interface a link-local address (by EUI-64 on a Cisco router) without configuring a global one."},
+    {t:"ipv6 nd managed-config-flag", d:"Interface command that sets the M flag to 1 in the interface's RAs: get your address from a stateful DHCPv6 server."},
+    {t:"ipv6 nd other-config-flag", d:"Interface command that sets the O flag to 1 in the interface's RAs: get other settings, such as DNS, from a stateless DHCPv6 server."},
+    {t:"ipv6 nd prefix default no-autoconfig", d:"Interface command that sets the A flag to 0 in the interface's RAs: don't use SLAAC. Used with the M flag for stateful-only DHCPv6."},
+    {t:"ipv6 unicast-routing", d:"Global command that makes a Cisco router forward IPv6 and send RAs. Off by default; without it, the router's LAN gets no RAs and its hosts get no global address by SLAAC."},
+    {t:"IRDP", d:"ICMP Router Discovery Protocol (RFC 1256): a legacy way for hosts to discover routers. Listed with the FHRPs, but no longer used."},
+    {t:"LLA", d:"Link-local address: an fe80:: address every IPv6 interface makes for itself. It only works on its own link. It's the address hosts use as their IPv6 default gateway."},
+    {t:"M flag", d:"Managed Address Configuration flag in an RA. Set to 1, it tells hosts to get their address from a stateful DHCPv6 server. Default 0."},
+    {t:"Neighbor Advertisement (NA)", d:"ICMPv6 reply to a Neighbor Solicitation. During DAD, an NA means the address is already in use."},
+    {t:"Neighbor Solicitation (NS)", d:"ICMPv6 message asking who has an IPv6 address. During DAD, a host sends one for its own new address."},
+    {t:"O flag", d:"Other Configuration flag in an RA. Set to 1, it tells hosts to get other settings, such as DNS servers, from a stateless DHCPv6 server. Default 0."},
+    {t:"Preemption", d:"Letting a higher-priority HSRP router take the active role back from a lower-priority one. Off by default; turned on with standby preempt."},
+    {t:"Router Advertisement (RA)", d:"ICMPv6 message a router sends to ff02::1, every 200 seconds by default and in answer to an RS. It carries the prefix, the A, O and M flags, and the router's link-local address as the gateway."},
+    {t:"Router redundancy", d:"Having more than one router able to act as a LAN's default gateway, so the gateway isn't a single point of failure."},
+    {t:"Router Solicitation (RS)", d:"ICMPv6 message a host sends to ff02::2 (all routers) to ask for an RA right away, instead of waiting for the next one."},
+    {t:"show ipv6 dhcp binding", d:"Lists the addresses a stateful DHCPv6 server has leased, with each client's DUID and link-local address. A stateless server shows none."},
+    {t:"show ipv6 dhcp interface", d:"Shows an interface's DHCPv6 role: the pool a server interface uses, the settings a client interface received, or a relay's destination."},
+    {t:"show ipv6 dhcp pool", d:"Shows each DHCPv6 pool: its prefix (if stateful), DNS server, domain name, and the number of active clients."},
+    {t:"SLAAC", d:"Stateless Address Autoconfiguration: a host builds its own global IPv6 address from the prefix in a router's RA, with no DHCPv6 server keeping track."},
+    {t:"standby preempt", d:"HSRP interface command that turns preemption on for a group."},
+    {t:"standby priority", d:"HSRP interface command that sets a router's priority in a group, 0–255, default 100. Highest becomes active."},
+    {t:"Standby router", d:"The HSRP router next in line: it watches the active router's hellos and takes over if they stop."},
+    {t:"Stateful DHCPv6", d:"DHCPv6 that leases addresses and keeps a binding for each client. The RA has M=1 and usually A=0."},
+    {t:"Stateless DHCPv6", d:"DHCPv6 that hands out settings, such as DNS, but no addresses, and keeps no bindings. The RA has A=1 and O=1. Hosts use SLAAC for the address."},
+    {t:"Virtual router", d:"A shared IP and MAC address that two or more routers present to hosts as one gateway. Hosts use it as their default gateway."},
+    {t:"Virtual router master", d:"VRRP's name for the router that forwards for the virtual router: the equivalent of HSRP's active router."},
+    {t:"VRRP", d:"Virtual Router Redundancy Protocol: the open-standard FHRP. VRRPv2 is IPv4 only; VRRPv3 does IPv4 and IPv6."},
+    {t:"Zone ID", d:"Also called a scope ID: the %number after a link-local address in Windows, such as fe80::1%11. It names the interface the address belongs to."},
+  ];
+  const QUIZ = [
+    { q:"An RA has A=1, O=1 and M=0. How does a host get its global address and its DNS server?",
+      choices:["Both from a stateful DHCPv6 server", "Address by SLAAC; DNS from a stateless DHCPv6 server", "Address from DHCPv6; DNS from the RA", "Both from the RA"], correct:1,
+      explain:"A=1 means build the address with SLAAC. O=1 means get other settings, such as DNS, from a stateless DHCPv6 server." },
+    { q:"Which command sets the O flag in a Cisco router's RAs?",
+      choices:["ipv6 nd managed-config-flag", "ipv6 dhcp server", "ipv6 nd other-config-flag", "ipv6 address autoconfig"], correct:2,
+      explain:"ipv6 nd other-config-flag sets O to 1. managed-config-flag sets M." },
+    { q:"A router is configured for stateful DHCPv6. Which two RA settings should hosts see?",
+      choices:["A=1 and M=0", "A=0 and M=1", "A=1 and O=1", "A=0 and O=0, M=0"], correct:1,
+      explain:"ipv6 nd managed-config-flag sets M=1, and ipv6 nd prefix default no-autoconfig sets A=0, so hosts don't also make a SLAAC address." },
+    { q:"Where does a host using stateful DHCPv6 get its default gateway?",
+      choices:["The DHCPv6 REPLY's default-router option", "The source link-local address of the router's RA", "The DNS server", "It has none"], correct:1,
+      explain:"DHCPv6 has no default-router option. The gateway always comes from the RA: the router's link-local address." },
+    { q:"A host has just booted. Which message does it send to get an RA right away, and to what address?",
+      choices:["An RS to ff02::2", "An RA to ff02::1", "A SOLICIT to ff02::1:2", "An NS to ff02::1"], correct:0,
+      explain:"A Router Solicitation goes to ff02::2, all routers. The router answers with an RA to ff02::1, all nodes." },
+    { q:"What does a host do during duplicate address detection?",
+      choices:["Pings its default gateway", "Sends a Neighbor Solicitation for its own new address and listens for a Neighbor Advertisement", "Asks the DHCPv6 server whether the address is free", "Sends an RS"], correct:1,
+      explain:"An NA in reply means another device has the address, so the host must choose another interface ID." },
+    { q:"Which UDP port do DHCPv6 clients send to?",
+      choices:["67", "68", "546", "547"], correct:3,
+      explain:"Client to server is UDP 547; server to client is 546. 67 and 68 are DHCPv4." },
+    { q:"R2 is a stateless DHCPv6 server. What does show ipv6 dhcp binding show?",
+      choices:["One entry per client", "No bindings", "The DNS server's address", "The RA flags"], correct:1,
+      explain:"A stateless server leases no addresses, so it keeps no bindings. Only a stateful server lists them." },
+    { q:"Which interface command makes a router interface lease its IPv6 address from a stateful DHCPv6 server?",
+      choices:["ipv6 address autoconfig", "ipv6 address dhcp", "ipv6 dhcp server", "ipv6 enable"], correct:1,
+      explain:"ipv6 address dhcp makes it a stateful client. ipv6 address autoconfig uses SLAAC." },
+    { q:"A DHCPv6 server is on another network from its clients. Which command goes on the interface facing the clients?",
+      choices:["ip helper-address", "ipv6 dhcp server", "ipv6 dhcp relay destination", "ipv6 nd other-config-flag"], correct:2,
+      explain:"ipv6 dhcp relay destination is the DHCPv6 relay, the IPv6 equivalent of ip helper-address. The outgoing interface is also needed if the destination is a link-local address." },
+    { q:"What problem does a first-hop redundancy protocol solve?",
+      choices:["Loops between switches", "Hosts losing their only default gateway when a router fails", "Running out of DHCP addresses", "Unequal link speeds"], correct:1,
+      explain:"Hosts have one gateway address. An FHRP lets several routers share it, so another router can take over." },
+    { q:"Two HSRP routers with the default priority start up at the same moment. Which one becomes active?",
+      choices:["The one with the lowest IPv4 address", "The one with the highest IPv4 address", "The one with the lowest MAC address", "Neither: HSRP needs a priority set"], correct:1,
+      explain:"The default priority is 100. On a tie, the highest IPv4 address wins." },
+    { q:"D1 has HSRP priority 150 and D2 has 100. D1 reboots; D2 becomes active. When D1 comes back, D2 stays active. What's missing?",
+      choices:["standby preempt on D1", "standby priority on D2", "A higher hold time", "standby preempt on D2"], correct:0,
+      explain:"Without preemption, an active router stays active. standby preempt on the higher-priority router lets it take the role back." },
+    { q:"By default, how long does an HSRP standby router wait without hearing the active router before taking over?",
+      choices:["3 seconds", "10 seconds", "15 seconds", "30 seconds"], correct:1,
+      explain:"Hellos are every 3 seconds and the hold time is 10." },
+    { q:"Which FHRP is an open standard?",
+      choices:["HSRP", "GLBP", "VRRP", "HSRP for IPv6"], correct:2,
+      explain:"VRRP is the open standard. HSRP, HSRP for IPv6 and GLBP are Cisco-proprietary." },
+    { q:"Which FHRP lets every router in the group forward some of the traffic?",
+      choices:["HSRP", "VRRPv2", "GLBP", "IRDP"], correct:2,
+      explain:"GLBP adds load balancing. HSRP and VRRP have one router forwarding at a time." },
+  ];
+</script>

@@ -76,10 +76,10 @@
           <td>Module Group Exam: Redundant Networks (5–6); Module 7 – DHCPv4</td>
           <td class="status filed"><a class="open-link" href="IT141_Session06.html">Open →</a></td>
         </tr>
-        <tr>
+        <tr class="filed">
           <td class="num">7</td>
           <td>Module 8 – SLAAC and DHCPv6 Concepts; Module 9 – FHRP Concepts; Midterm Review</td>
-          <td class="status pending">Pending</td>
+          <td class="status filed"><a class="open-link" href="IT141_Session07.html">Open →</a></td>
         </tr>
         <tr>
           <td class="num">8</td>
@@ -139,6 +139,7 @@
         <tr><td>Inter-VLAN routing</td><td>None: one LAN per router port</td><td>Router-on-a-stick on R1, then <strong>D1</strong>, a Layer 3 switch, takes over the <code>.1</code> gateways in Session 3</td></tr>
           <tr><td>Links between switches</td><td>One cable, no backups</td><td>HQ becomes a triangle (Session 4, Spanning Tree), then every side gets a second cable bundled into an EtherChannel (Session 5)</td></tr>
           <tr><td>Host addresses</td><td>Typed in by hand; DHCP seen from the client side</td><td>R1 leases them to HQ through D1's relay, and R2 to its own LAN (Session 6). PC-A and SRV1 stay static.</td></tr>
+        <tr><td>IPv6 host settings</td><td>SLAAC; the three methods by name</td><td>Shipping's hosts get their IPv6 DNS server from R2 by stateless DHCPv6 (Session 7)</td></tr>
         <tr><td>IPv6 subnets</td><td class="mono">2001:db8:acad:1:: / :2::</td><td class="mono">2001:db8:acad:10:: / :20::</td></tr>
       </tbody>
     </table>
