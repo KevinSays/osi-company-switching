@@ -1,0 +1,1347 @@
+<meta charset="utf-8">
+<title>IT141 Session 9 – Switch Security Configuration</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/theme.css">
+<script src="assets/site.js" defer></script>
+
+<header class="masthead">
+  <div class="wrap">
+    <p class="eyebrow">IT141 · SESSION 9 · FIELD NOTES</p>
+    <h1>Switch Security Configuration: Locking the Doors</h1>
+    <p class="lede">Session 8 walked the building and listed every way in. This session closes them, one feature at a time: empty ports parked, every desk port limited to the device that belongs there, DHCP answers accepted only from the direction of the real server, forged ARP replies dropped, and any port that hears a BPDU shut on the spot. The hard part isn't the commands. It's deciding which ports to trust.</p>
+    <div class="factrow">
+      <span class="fact"><b>New material</b> Module 11 — Switch Security Configuration</span>
+      <span class="fact"><b>Network change</b> HQ and Shipping hardened</span>
+      <span class="fact"><b>Next session</b> Modules 12–13 — WLAN Concepts and Configuration</span>
+    </div>
+  </div>
+</header>
+
+<nav class="index" data-pin="#flashcards #quiz" aria-label="Section index">
+  <div class="wrap">
+    <a href="index.html" class="toc-link">↩ Contents</a>
+    <a href="#overview">Overview</a>
+    <a href="#park">Park Unused Ports</a>
+    <a href="#portsec">Port Security</a>
+    <a href="#violations">Violations</a>
+    <a href="#vlanhard">VLAN Attacks</a>
+    <a href="#snooping">DHCP Snooping</a>
+    <a href="#dai">ARP Inspection</a>
+    <a href="#stpguard">PortFast &amp; BPDU Guard</a>
+    <a href="#cdpedge">CDP Off</a>
+    <a href="#casefile">Case Closed</a>
+    <a href="#trustdrill">Trust Drill</a>
+    <a href="#mistakes">Common Mistakes</a>
+    <a href="#reach">What Works Now</a>
+    <a href="#ticket">The Ticket</a>
+    <a href="#checkpoint">Checkpoint</a>
+    <a href="#flashcards">Flashcards</a>
+    <a href="#quiz">Quiz</a>
+    <a href="#examples">Examples</a>
+    <a href="#glossary">Glossary</a>
+  </div>
+</nav>
+
+<main class="wrap">
+
+  <!-- OVERVIEW -->
+  <section id="overview">
+    <div class="section-head">
+      <p class="kicker">Module 11</p>
+      <h2>What Session 9 covers</h2>
+      <p>One module, in NetAcad's order: securing unused ports and configuring port security; the steps that stop VLAN attacks; DHCP snooping; Dynamic ARP Inspection; and PortFast with BPDU Guard. Each one answers an attack from Session 8.</p>
+    </div>
+    <div class="cold-open">
+      <p class="tag">Cold open · Night Shift, the next week</p>
+      <p>The Surveyor pins Case File D-06 to the NOC's corkboard and hands the Rookie a list. "Every trick on that card, and the door it comes through. Tonight we close them." The Rookie reads it twice. "Most of these are one command." "Most of them are one command," she agrees. "The hard part is the word next to it. Trusted, or untrusted. Get that wrong on one port and you've either locked out the real DHCP server, or let the Impostor sign for it."</p>
+    </div>
+    <ul class="obj-list">
+      <li>Secure unused ports by shutting them and moving them to an unused VLAN</li>
+      <li>Configure port security: the maximum, static, dynamic and sticky addresses, aging and violation modes, and recover an err-disabled port</li>
+      <li>Apply NetAcad's five steps against VLAN hopping</li>
+      <li>Configure DHCP snooping with trusted and untrusted ports and rate limits</li>
+      <li>Configure Dynamic ARP Inspection, and explain why it needs DHCP snooping</li>
+      <li>Configure PortFast and BPDU Guard on access ports</li>
+    </ul>
+        <div class="teach-note">
+      <span class="label">Topology used on this page</span>
+      The network as Sessions 7 and 8 left it. Today HQ and Shipping change: S1, S2 and S3 get every feature on this page. <strong>D1, R1 and R2 don&#x27;t change.</strong> The <strong>edge ports</strong> are every port that isn&#x27;t a link between switches: <code>f0/1 - 22</code> on S1 and S2 (Session 4&#x27;s preview used <code>f0/1 - 20</code>; the two spares are edge ports too), and every S3 port except G0/1, its uplink to R2. Every edge feature goes on the whole range, parked ports included, so a port that&#x27;s unparked later is already protected. Some output is labelled <strong>illustration</strong>: what the switches would log if someone tried. The MAC addresses are made up.
+    </div>
+    <div class="teach-note warn">
+      <span class="label">The order matters</span>
+      DHCP snooping goes on first, then the DHCP clients renew so the switches record their leases, and only then Dynamic ARP Inspection. Leases from Session 6 were handed out before snooping existed, so the switches have no record of them. Turn on DAI first and it would cut PC-D off.
+    </div>
+
+  </section>
+
+  <!-- PARK -->
+  <section id="park">
+    <div class="section-head">
+      <p class="kicker">Module 11.1</p>
+      <h2>Park every unused port</h2>
+      <p>The simplest defence there is: a port nobody uses should be shut. HQ has parked its spare ports in VLAN 999 since Session 2, but left the empty desk jacks inside the VLAN 10 and 30 ranges live. Session 8's exposure map called those the main hole. Session 2 promised this session would close it.</p>
+    </div>
+        <p>Every empty desk jack goes into VLAN 999, the parking VLAN, and is shut. That includes S1 F0/5, the jack every Session 8 illustration used.</p>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · park everything but PC-A</span></div>
+      <div class="terminal-body"><span class="prompt">S1#</span> <span class="cmd">configure terminal</span>
+<span class="comment">! PC-A stays on F0/1. Everything else in the desk ranges is empty.</span>
+<span class="prompt">S1(config)#</span> <span class="cmd">interface range f0/2 - 20</span>
+<span class="prompt">S1(config-if-range)#</span> <span class="cmd">switchport mode access</span>
+<span class="prompt">S1(config-if-range)#</span> <span class="cmd">switchport access vlan 999</span>
+<span class="prompt">S1(config-if-range)#</span> <span class="cmd">shutdown</span>
+<span class="prompt">S1(config-if-range)#</span> <span class="cmd">end</span></div>
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S2 · park around PC-C and PC-D</span></div>
+      <div class="terminal-body"><span class="prompt">S2#</span> <span class="cmd">configure terminal</span>
+<span class="comment">! PC-C is on F0/1 and PC-D is on F0/11. Park around them.</span>
+<span class="prompt">S2(config)#</span> <span class="cmd">interface range f0/2 - 10 , f0/12 - 20</span>
+<span class="prompt">S2(config-if-range)#</span> <span class="cmd">switchport mode access</span>
+<span class="prompt">S2(config-if-range)#</span> <span class="cmd">switchport access vlan 999</span>
+<span class="prompt">S2(config-if-range)#</span> <span class="cmd">shutdown</span>
+<span class="prompt">S2(config-if-range)#</span> <span class="cmd">end</span></div>
+    </div>
+    <p>S3 at Shipping has never had a parking VLAN, so it&#x27;s created first. S3&#x27;s three devices and its uplink are also set to access mode explicitly; port security will need that.</p>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S3 · create VLAN 999, then park</span></div>
+      <div class="terminal-body"><span class="prompt">S3#</span> <span class="cmd">configure terminal</span>
+<span class="comment">! S3 has never had VLAN 999. Create it first.</span>
+<span class="prompt">S3(config)#</span> <span class="cmd">vlan 999</span>
+<span class="prompt">S3(config-vlan)#</span> <span class="cmd">name PARKING</span>
+<span class="prompt">S3(config-vlan)#</span> <span class="cmd">exit</span>
+<span class="comment">! The three Shipping devices and the uplink, set explicitly</span>
+<span class="prompt">S3(config)#</span> <span class="cmd">interface range f0/1 - 3 , g0/1</span>
+<span class="prompt">S3(config-if-range)#</span> <span class="cmd">switchport mode access</span>
+<span class="prompt">S3(config-if-range)#</span> <span class="cmd">switchport access vlan 20</span>
+<span class="prompt">S3(config-if-range)#</span> <span class="cmd">exit</span>
+<span class="comment">! Everything else is parked</span>
+<span class="prompt">S3(config)#</span> <span class="cmd">interface range f0/4 - 24 , g0/2</span>
+<span class="prompt">S3(config-if-range)#</span> <span class="cmd">switchport mode access</span>
+<span class="prompt">S3(config-if-range)#</span> <span class="cmd">switchport access vlan 999</span>
+<span class="prompt">S3(config-if-range)#</span> <span class="cmd">shutdown</span>
+<span class="prompt">S3(config-if-range)#</span> <span class="cmd">end</span></div>
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S2 · the proof</span></div>
+      <div class="terminal-body"><span class="prompt">S2#</span> <span class="cmd">show interfaces status</span>
+<span class="out">Port      Name               Status       Vlan       Duplex  Speed Type</span>
+<span class="out">Fa0/1                        connected    10         a-full  a-100 10/100BaseTX</span>
+<span class="hl">Fa0/2                        disabled     999          auto   auto 10/100BaseTX</span>
+<span class="out">Fa0/3                        disabled     999          auto   auto 10/100BaseTX</span>
+<span class="out">...</span>
+<span class="out">Fa0/10                       disabled     999          auto   auto 10/100BaseTX</span>
+<span class="out">Fa0/11                       connected    30         a-full  a-100 10/100BaseTX</span>
+<span class="out">Fa0/12                       disabled     999          auto   auto 10/100BaseTX</span>
+<span class="out">...</span>
+<span class="out">Fa0/21                       disabled     999          auto   auto 10/100BaseTX</span>
+<span class="out">Fa0/22                       disabled     999          auto   auto 10/100BaseTX</span>
+<span class="out">Fa0/23                       connected    trunk      a-full  a-100 10/100BaseTX</span>
+<span class="out">Fa0/24                       connected    trunk      a-full  a-100 10/100BaseTX</span>
+<span class="out">Gi0/1                        connected    trunk      a-full a-1000 10/100/1000BaseTX</span>
+<span class="out">Gi0/2                        connected    trunk      a-full a-1000 10/100/1000BaseTX</span>
+<span class="out">Po1                          connected    trunk      a-full  a-100</span>
+<span class="out">Po3                          connected    trunk      a-full a-1000</span></div>
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S2 · shut ports still belong to their VLAN</span></div>
+      <div class="terminal-body"><span class="prompt">S2#</span> <span class="cmd">show vlan brief</span>
+
+<span class="out">VLAN Name                             Status    Ports</span>
+<span class="out">---- -------------------------------- --------- -------------------------------</span>
+<span class="out">1    default                          active</span>
+<span class="out">10   FRONT-DESK                       active    Fa0/1</span>
+<span class="out">30   LOGISTICS                        active    Fa0/11</span>
+<span class="out">99   MGMT                             active</span>
+<span class="out">900  NATIVE                           active</span>
+<span class="hl">999  PARKING                          active    Fa0/2, Fa0/3, Fa0/4, Fa0/5</span>
+<span class="out">                                                Fa0/6, Fa0/7, Fa0/8, Fa0/9</span>
+<span class="out">                                                Fa0/10, Fa0/12, Fa0/13, Fa0/14</span>
+<span class="out">                                                Fa0/15, Fa0/16, Fa0/17, Fa0/18</span>
+<span class="out">                                                Fa0/19, Fa0/20, Fa0/21, Fa0/22</span>
+<span class="out">1002 fddi-default                     act/unsup</span>
+<span class="out">...</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong><code>disabled</code> means administratively shut.</strong> It&#x27;s different from <code>notconnect</code>, which is a live port with nothing plugged in. Before today, S2 F0/2–10 showed <code>notconnect</code> in VLAN 10: the hole Session 8 named.</li>
+      <li><strong><code>show vlan brief</code> still lists shut ports in their VLAN.</strong> Shutting a port doesn&#x27;t take it out of the VLAN. Trunks never appear here.</li>
+      <li>S1 looks the same, with only F0/1 left in VLAN 10 and nothing in VLAN 30.</li>
+    </ul>
+
+  </section>
+
+  <!-- PORT SECURITY -->
+  <section id="portsec">
+    <div class="section-head">
+      <p class="kicker">Module 11.1</p>
+      <h2>Port security</h2>
+      <p>Port security limits how many MAC addresses may use a port, and which ones. Each frame's source MAC is checked against the port's list of <strong>secure MAC addresses</strong>. That stops MAC address flooding cold: the thousandth made-up address never gets in.</p>
+    </div>
+    <h3 class="sub">Only on a port that's been told what it is</h3>
+        <div class="teach-note warn">
+      <span class="label">Illustration</span>
+      A 2960 straight out of the box, not an HQ switch (look at the prompt).
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">A factory-default 2960 · port security on a dynamic port</span></div>
+      <div class="terminal-body"><span class="prompt">Switch#</span> <span class="cmd">configure terminal</span>
+<span class="prompt">Switch(config)#</span> <span class="cmd">interface f0/1</span>
+<span class="prompt">Switch(config-if)#</span> <span class="cmd">switchport port-security</span>
+<span class="hl">Command rejected: FastEthernet0/1 is a dynamic port.</span>
+<span class="prompt">Switch(config-if)#</span> <span class="cmd">switchport mode access</span>
+<span class="prompt">Switch(config-if)#</span> <span class="cmd">switchport port-security</span>
+<span class="prompt">Switch(config-if)#</span> <span class="cmd">end</span></div>
+    </div>
+    <p>Port security works only on a port set to access (or trunk) by hand. A default 2960 port is <code>dynamic auto</code>, Session 2&#x27;s "Will it trunk?" again. At HQ this never comes up: every desk port has been <code>switchport mode access</code> since Session 2.</p>
+
+    <h3 class="sub">Three ways to learn a secure address</h3>
+    <table class="spec">
+      <thead><tr><th>Method</th><th>Command</th><th>Survives a reload?</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Static</strong> (manually configured)</td><td><code>switchport port-security mac-address</code> <em>mac</em></td><td>Yes, once the configuration is saved</td></tr>
+        <tr><td><strong>Dynamic</strong></td><td>None: the switch learns the address of whatever is plugged in</td><td>No: it's forgotten after a reload, and whenever the link goes down (unplug the PC and the port learns whatever comes next)</td></tr>
+        <tr><td><strong>Sticky</strong> (dynamically learned, kept)</td><td><code>switchport port-security mac-address sticky</code></td><td>Yes, once the running configuration is saved: the learned address is written into it</td></tr>
+      </tbody>
+    </table>
+    <p>The default maximum is <strong>one</strong> address per port; <code>switchport port-security maximum</code> raises it. The highest value allowed depends on the switch.</p>
+        <h3 class="sub">HQ&#x27;s choices</h3>
+    <table class="spec">
+      <thead><tr><th>Setting</th><th>HQ uses</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Maximum</td><td>1 (the default)</td><td>One PC per desk</td></tr>
+        <tr><td>Learning</td><td><strong>Sticky</strong></td><td>Each desk learns its PC once and keeps it, even with the cable out. Dynamic would forget the PC the moment it&#x27;s unplugged, and accept whatever was plugged in next.</td></tr>
+        <tr><td>Violation mode</td><td><strong>Shutdown</strong> (the default)</td><td>A stranger at a desk cuts the desk off until someone looks</td></tr>
+        <tr><td>SRV1 (S3 F0/2)</td><td><strong>Restrict</strong></td><td>Drop and log a stranger, but keep web and DNS online for everyone</td></tr>
+        <tr><td>Trunks, port-channels, S3 G0/1</td><td>None</td><td>Links between devices HQ controls; a violation there would cut off a whole switch. Trunk port security is beyond this course.</td></tr>
+      </tbody>
+    </table>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · every edge port (S2 is identical)</span></div>
+      <div class="terminal-body"><span class="prompt">S1#</span> <span class="cmd">configure terminal</span>
+<span class="prompt">S1(config)#</span> <span class="cmd">interface range f0/1 - 22</span>
+<span class="prompt">S1(config-if-range)#</span> <span class="cmd">switchport port-security</span>
+<span class="comment">! The next two lines are the defaults, typed so the choice is visible.</span>
+<span class="comment">! Neither appears in the running config.</span>
+<span class="prompt">S1(config-if-range)#</span> <span class="cmd">switchport port-security maximum 1</span>
+<span class="prompt">S1(config-if-range)#</span> <span class="cmd">switchport port-security violation shutdown</span>
+<span class="prompt">S1(config-if-range)#</span> <span class="cmd">switchport port-security mac-address sticky</span>
+<span class="prompt">S1(config-if-range)#</span> <span class="cmd">end</span>
+<span class="prompt">S1#</span> <span class="cmd">copy running-config startup-config</span></div>
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S3 · every port but the uplink; SRV1 restricts</span></div>
+      <div class="terminal-body"><span class="prompt">S3#</span> <span class="cmd">configure terminal</span>
+<span class="comment">! Every port except G0/1, the uplink to R2</span>
+<span class="prompt">S3(config)#</span> <span class="cmd">interface range f0/1 - 24 , g0/2</span>
+<span class="prompt">S3(config-if-range)#</span> <span class="cmd">switchport port-security</span>
+<span class="prompt">S3(config-if-range)#</span> <span class="cmd">switchport port-security maximum 1</span>
+<span class="prompt">S3(config-if-range)#</span> <span class="cmd">switchport port-security violation shutdown</span>
+<span class="prompt">S3(config-if-range)#</span> <span class="cmd">switchport port-security mac-address sticky</span>
+<span class="prompt">S3(config-if-range)#</span> <span class="cmd">exit</span>
+<span class="comment">! SRV1: drop and log a stranger, but keep the server online</span>
+<span class="prompt">S3(config)#</span> <span class="cmd">interface f0/2</span>
+<span class="prompt">S3(config-if)#</span> <span class="cmd">switchport port-security violation restrict</span>
+<span class="prompt">S3(config-if)#</span> <span class="cmd">end</span>
+<span class="prompt">S3#</span> <span class="cmd">copy running-config startup-config</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong>The live ports learn at once.</strong> PC-A, PC-C, PC-D, PC-B, SRV1 and the home router are learned the moment they send a frame. Parked ports learn nothing until they&#x27;re turned on.</li>
+      <li><strong><code>copy running-config startup-config</code> is what makes sticky permanent.</strong> Sticky addresses are written into the running configuration only.</li>
+      <li><strong>The home router on F0/3 needs only one MAC.</strong> S3 only ever sees its internet port; the laptop behind it is hidden by NAT.</li>
+      <li><strong>A second trigger:</strong> a MAC that&#x27;s secure on one port and shows up on another secure port in the same VLAN is also a violation. That&#x27;s a partial answer to Session 8&#x27;s MAC spoofing; IP Source Guard is still the named fix.</li>
+    </ul>
+
+        <h3 class="sub">Verify</h3>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S2 · PC-C&#x27;s port</span></div>
+      <div class="terminal-body"><span class="prompt">S2#</span> <span class="cmd">show port-security interface f0/1</span>
+<span class="out">Port Security              : Enabled</span>
+<span class="hl">Port Status                : Secure-up</span>
+<span class="out">Violation Mode             : Shutdown</span>
+<span class="out">Aging Time                 : 0 mins</span>
+<span class="out">Aging Type                 : Absolute</span>
+<span class="out">SecureStatic Address Aging : Disabled</span>
+<span class="hl">Maximum MAC Addresses      : 1</span>
+<span class="out">Total MAC Addresses        : 1</span>
+<span class="out">Configured MAC Addresses   : 0</span>
+<span class="hl">Sticky MAC Addresses       : 1</span>
+<span class="out">Last Source Address:Vlan   : 00e0.f70c.0011:10</span>
+<span class="out">Security Violation Count   : 0</span></div>
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S2 · every secure port</span></div>
+      <div class="terminal-body"><span class="prompt">S2#</span> <span class="cmd">show port-security</span>
+<span class="out">Secure Port  MaxSecureAddr  CurrentAddr  SecurityViolation  Security Action</span>
+<span class="out">                (Count)       (Count)          (Count)</span>
+<span class="out">---------------------------------------------------------------------------</span>
+<span class="hl">      Fa0/1              1            1                  0         Shutdown</span>
+<span class="out">      Fa0/2              1            0                  0         Shutdown</span>
+<span class="out">...</span>
+<span class="hl">     Fa0/11              1            1                  0         Shutdown</span>
+<span class="out">     Fa0/12              1            0                  0         Shutdown</span>
+<span class="out">...</span>
+<span class="out">     Fa0/22              1            0                  0         Shutdown</span>
+<span class="out">---------------------------------------------------------------------------</span>
+<span class="out">Total Addresses in System (excluding one mac per port)     : 0</span>
+<span class="out">Max Addresses limit in System (excluding one mac per port) : 8192</span></div>
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S2 · the secure addresses</span></div>
+      <div class="terminal-body"><span class="prompt">S2#</span> <span class="cmd">show port-security address</span>
+<span class="out">               Secure Mac Address Table</span>
+<span class="out">-----------------------------------------------------------------------------</span>
+<span class="out">Vlan    Mac Address       Type                          Ports   Remaining Age</span>
+<span class="out">                                                                   (mins)</span>
+<span class="out">----    -----------       ----                          -----   -------------</span>
+<span class="hl">  10    00e0.f70c.0011    SecureSticky                  Fa0/1        -</span>
+<span class="hl">  30    0090.2b5d.0030    SecureSticky                  Fa0/11       -</span>
+<span class="out">-----------------------------------------------------------------------------</span>
+<span class="out">Total Addresses in System (excluding one mac per port)     : 0</span>
+<span class="out">Max Addresses limit in System (excluding one mac per port) : 8192</span></div>
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S2 · the sticky line in the configuration</span></div>
+      <div class="terminal-body"><span class="prompt">S2#</span> <span class="cmd">show running-config interface f0/1</span>
+<span class="out">Building configuration...</span>
+
+<span class="out">Current configuration : ...</span>
+<span class="comment">!</span>
+<span class="out">interface FastEthernet0/1</span>
+<span class="out"> switchport access vlan 10</span>
+<span class="out"> switchport mode access</span>
+<span class="out"> switchport port-security</span>
+<span class="out"> switchport port-security mac-address sticky</span>
+<span class="hl"> switchport port-security mac-address sticky 00e0.f70c.0011</span>
+<span class="out">end</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong><code>Secure-up</code></strong>: port security is on and the port is forwarding. After a violation it becomes <code>Secure-shutdown</code>.</li>
+      <li><strong>Three views of one fact:</strong> <code>Sticky MAC Addresses : 1</code>, <code>SecureSticky</code>, and the configuration line with PC-C&#x27;s MAC. Match it against PC-C&#x27;s Physical Address from Session 6.</li>
+      <li><strong>Two <code>sticky</code> lines, two jobs.</strong> The first turns sticky learning on; the one with a MAC is the address it learned.</li>
+      <li><strong><code>maximum 1</code> and <code>violation shutdown</code> don&#x27;t appear</strong> in the running configuration because they&#x27;re the defaults. <code>show port-security interface</code> is where to confirm them.</li>
+      <li><code>Total Addresses in System (excluding one mac per port) : 0</code> isn&#x27;t an error: each port&#x27;s first address isn&#x27;t counted.</li>
+    </ul>
+
+    <h3 class="sub">Aging</h3>
+    <p>Secure addresses can be set to expire, so a port can be reused without anyone deleting the old address by hand. <code>switchport port-security aging time</code> sets the time, and <code>aging type</code> picks how it counts: <strong>absolute</strong> (deleted after the time, whatever happens) or <strong>inactivity</strong> (deleted only after the device has been silent that long).</p>
+        <div class="teach-note warn">
+      <span class="label">Illustration</span>
+      A shared hot desk where a different laptop sits every day. HQ&#x27;s desks are sticky, so HQ doesn&#x27;t use aging.
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">A hot-desk port · ten minutes of silence frees it</span></div>
+      <div class="terminal-body"><span class="prompt">Switch(config)#</span> <span class="cmd">interface f0/7</span>
+<span class="prompt">Switch(config-if)#</span> <span class="cmd">switchport mode access</span>
+<span class="prompt">Switch(config-if)#</span> <span class="cmd">switchport port-security</span>
+<span class="prompt">Switch(config-if)#</span> <span class="cmd">switchport port-security aging time 10</span>
+<span class="prompt">Switch(config-if)#</span> <span class="cmd">switchport port-security aging type inactivity</span>
+<span class="prompt">Switch(config-if)#</span> <span class="cmd">end</span>
+<span class="prompt">Switch#</span> <span class="cmd">show port-security interface f0/7</span>
+<span class="out">Port Security              : Enabled</span>
+<span class="out">Port Status                : Secure-up</span>
+<span class="out">Violation Mode             : Shutdown</span>
+<span class="hl">Aging Time                 : 10 mins</span>
+<span class="hl">Aging Type                 : Inactivity</span>
+<span class="out">SecureStatic Address Aging : Disabled</span>
+<span class="out">...</span></div>
+    </div>
+    <p>Aging and sticky answer opposite needs: sticky keeps a desk&#x27;s PC forever, aging lets the desk forget. Don&#x27;t combine them.</p>
+
+  </section>
+
+  <!-- VIOLATIONS -->
+  <section id="violations">
+    <div class="section-head">
+      <p class="kicker">Module 11.1</p>
+      <h2>Violations and err-disabled ports</h2>
+      <p>A <strong>violation</strong> happens when a frame arrives from a MAC address that isn't secure on the port, and the port already has its maximum. What the switch does next is the <strong>violation mode</strong>.</p>
+    </div>
+        <p>In every mode, frames from the unknown MAC are dropped. The modes differ in what else happens.</p>
+    <table class="spec">
+      <thead><tr><th>Mode</th><th>Known device&#x27;s traffic</th><th>Syslog message</th><th>Violation counter</th><th>Port err-disabled</th></tr></thead>
+      <tbody>
+        <tr><td><strong>shutdown</strong> (default)</td><td><strong>Stops too:</strong> the whole port goes down</td><td>Yes</td><td>Increments</td><td><strong>Yes</strong>, until <code>shutdown</code> then <code>no shutdown</code></td></tr>
+        <tr><td><strong>restrict</strong></td><td>Keeps flowing</td><td>Yes</td><td>Increments</td><td>No</td></tr>
+        <tr><td><strong>protect</strong></td><td>Keeps flowing</td><td><strong>No</strong></td><td><strong>No</strong></td><td>No</td></tr>
+      </tbody>
+    </table>
+    <p><strong>Protect</strong> is the least secure, because nobody ever finds out. <strong>Restrict</strong> is the middle choice, and it&#x27;s why SRV1 uses it:</p>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S3 · SRV1 restricts instead of shutting</span></div>
+      <div class="terminal-body"><span class="prompt">S3#</span> <span class="cmd">show port-security interface f0/2</span>
+<span class="out">Port Security              : Enabled</span>
+<span class="out">Port Status                : Secure-up</span>
+<span class="hl">Violation Mode             : Restrict</span>
+<span class="out">Aging Time                 : 0 mins</span>
+<span class="out">Aging Type                 : Absolute</span>
+<span class="out">SecureStatic Address Aging : Disabled</span>
+<span class="out">Maximum MAC Addresses      : 1</span>
+<span class="out">Total MAC Addresses        : 1</span>
+<span class="out">Configured MAC Addresses   : 0</span>
+<span class="out">Sticky MAC Addresses       : 1</span>
+<span class="out">Last Source Address:Vlan   : 0001.64a2.0100:20</span>
+<span class="out">Security Violation Count   : 0</span></div>
+    </div>
+    <p>Under <code>restrict</code>, a stranger on SRV1&#x27;s port would be dropped and logged, the counter would go up, and the port would stay <code>Secure-up</code>, still serving web and DNS.</p>
+
+        <h3 class="sub">A violation, start to finish</h3>
+    <p>Session 8&#x27;s intruder is back. F0/5 is parked now, so the only way into VLAN 10 is to take a live desk: it unplugs PC-C and plugs into S2 F0/1. That desk already knows its PC.</p>
+    <div class="teach-note warn">
+      <span class="label">Illustration</span>
+      What the switch would log. The course network never did this.
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S2 · the log</span></div>
+      <div class="terminal-body"><span class="out">%PM-4-ERR_DISABLE: psecure-violation error detected on Fa0/1, putting Fa0/1 in err-disable state</span>
+<span class="hl">%PORT_SECURITY-2-PSECURE_VIOLATION: Security violation occurred, caused by MAC address 0040.0bad.0005 on port FastEthernet0/1.</span>
+<span class="out">%LINEPROTO-5-UPDOWN: Line protocol on Interface FastEthernet0/1, changed state to down</span>
+<span class="out">%LINK-3-UPDOWN: Interface FastEthernet0/1, changed state to down</span></div>
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S2 · err-disabled, not administratively down</span></div>
+      <div class="terminal-body"><span class="prompt">S2#</span> <span class="cmd">show interfaces f0/1</span>
+<span class="hl">FastEthernet0/1 is down, line protocol is down (err-disabled)</span>
+<span class="out">  Hardware is Lance, address is ...</span>
+<span class="out">...</span></div>
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S2 · who did it, and how many times</span></div>
+      <div class="terminal-body"><span class="prompt">S2#</span> <span class="cmd">show port-security interface f0/1</span>
+<span class="out">Port Security              : Enabled</span>
+<span class="hl">Port Status                : Secure-shutdown</span>
+<span class="out">Violation Mode             : Shutdown</span>
+<span class="out">Aging Time                 : 0 mins</span>
+<span class="out">Aging Type                 : Absolute</span>
+<span class="out">SecureStatic Address Aging : Disabled</span>
+<span class="out">Maximum MAC Addresses      : 1</span>
+<span class="out">Total MAC Addresses        : 1</span>
+<span class="out">Configured MAC Addresses   : 0</span>
+<span class="out">Sticky MAC Addresses       : 1</span>
+<span class="hl">Last Source Address:Vlan   : 0040.0bad.0005:10</span>
+<span class="hl">Security Violation Count   : 1</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong>The very first frame</strong> came from a MAC that wasn&#x27;t the sticky one, and the port already had its one allowed address, so S2 shut the port at once.</li>
+      <li><strong><code>Last Source Address</code> names the culprit</strong>, and the counter went to 1. The sticky address is still PC-C&#x27;s.</li>
+      <li><strong>What the intruder no longer gets:</strong> no lease, no ARP poisoning, and no MAC flood: the first made-up address kills the port.</li>
+    </ul>
+    <p>Recovery, once the laptop is gone and PC-C is plugged back in:</p>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S2 · bring the desk back</span></div>
+      <div class="terminal-body"><span class="prompt">S2#</span> <span class="cmd">configure terminal</span>
+<span class="prompt">S2(config)#</span> <span class="cmd">interface f0/1</span>
+<span class="prompt">S2(config-if)#</span> <span class="cmd">shutdown</span>
+<span class="prompt">S2(config-if)#</span> <span class="cmd">no shutdown</span>
+<span class="prompt">S2(config-if)#</span> <span class="cmd">end</span>
+<span class="out">%LINK-3-UPDOWN: Interface FastEthernet0/1, changed state to up</span>
+<span class="out">%LINEPROTO-5-UPDOWN: Line protocol on Interface FastEthernet0/1, changed state to up</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong>Remove the cause first.</strong> Re-enabling with the laptop still attached just err-disables the port again.</li>
+      <li><strong>A legitimate replacement PC triggers the same violation.</strong> To give a desk to a new PC, remove the old sticky line first: <code>no switchport port-security mac-address sticky</code> <em>old-mac</em>.</li>
+    </ul>
+
+  </section>
+
+  <!-- VLAN ATTACKS -->
+  <section id="vlanhard">
+    <div class="section-head">
+      <p class="kicker">Module 11.2</p>
+      <h2>Mitigate VLAN attacks</h2>
+      <p>NetAcad's five steps against VLAN hopping. HQ's design has followed every one since Session 2, so this is a check, not a change.</p>
+    </div>
+    <table class="spec">
+      <thead><tr><th>Step</th><th>Command</th><th>At HQ</th></tr></thead>
+      <tbody>
+        <tr><td>1 · No DTP on access ports</td><td><code>switchport mode access</code></td><td>Every host port, since Session 2</td></tr>
+        <tr><td>2 · Unused ports shut, in an unused VLAN</td><td><code>shutdown</code>, <code>switchport access vlan 999</code></td><td>Finished today</td></tr>
+        <tr><td>3 · Trunks made by hand</td><td><code>switchport mode trunk</code></td><td>Every trunk, since Session 2</td></tr>
+        <tr><td>4 · No DTP on trunks</td><td><code>switchport nonegotiate</code></td><td>Every trunk, since Session 2</td></tr>
+        <tr><td>5 · A native VLAN other than VLAN 1</td><td><code>switchport trunk native vlan</code> <em>vlan</em></td><td>VLAN 900, with no hosts, since Session 2</td></tr>
+      </tbody>
+    </table>
+        <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · every trunk static, native VLAN 900</span></div>
+      <div class="terminal-body"><span class="prompt">S1#</span> <span class="cmd">show interfaces trunk</span>
+
+<span class="out">Port        Mode             Encapsulation  Status        Native vlan</span>
+<span class="hl">Po1         on               802.1q         trunking      900</span>
+<span class="hl">Po2         on               802.1q         trunking      900</span>
+
+<span class="out">Port        Vlans allowed on trunk</span>
+<span class="out">Po1         10,30,99,900</span>
+<span class="out">Po2         10,30,99,900</span>
+
+<span class="out">Port        Vlans allowed and active in management domain</span>
+<span class="out">Po1         10,30,99,900</span>
+<span class="out">Po2         10,30,99,900</span>
+
+<span class="out">Port        Vlans in spanning tree forwarding state and not pruned</span>
+<span class="out">Po1         10,30,99,900</span>
+<span class="out">Po2         10,30,99,900</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong><code>on</code> means a static trunk.</strong> <code>desirable</code> or <code>auto</code> here would mean DTP was still negotiating. Native <code>900</code> is step 5. Session 8&#x27;s <code>show interfaces po1 switchport</code> showed <code>Negotiation of Trunking: Off</code>.</li>
+      <li><strong>Two framings, one fix.</strong> Module 11 counts double-tagging as a kind of VLAN hopping; Module 10, and Session 8&#x27;s drill, list them separately. The same five steps stop both.</li>
+    </ul>
+
+  </section>
+
+  <!-- DHCP SNOOPING -->
+  <section id="snooping">
+    <div class="section-head">
+      <p class="kicker">Module 11.3</p>
+      <h2>DHCP snooping</h2>
+      <p>Port security alone can stop the simplest DHCP starvation, where each request comes from a new source MAC. It can't stop a tool that keeps one real source MAC and puts made-up addresses inside the DHCP message, and it does nothing against a rogue server. DHCP snooping does.</p>
+    </div>
+    <p>DHCP snooping sorts every port into two kinds:</p>
+    <table class="spec">
+      <thead><tr><th></th><th>Trusted</th><th>Untrusted (the default)</th></tr></thead>
+      <tbody>
+        <tr><td>Which ports</td><td>The ones that lead toward the <strong>real DHCP server</strong>: uplinks and trunks to devices the network team controls</td><td>Every access port, and anything else</td></tr>
+        <tr><td>DHCP server messages (OFFER, ACK)</td><td>Allowed</td><td><strong>Dropped</strong>: no device here should be answering DHCP</td></tr>
+        <tr><td>Client requests</td><td>Allowed</td><td>Allowed, up to a rate limit</td></tr>
+      </tbody>
+    </table>
+    <p>As leases pass through, the switch records each client on an untrusted port in its <strong>DHCP snooping binding table</strong>: the MAC address, the IP address it was given, the VLAN and the port. Dynamic ARP Inspection depends on that table.</p>
+    <p>Four steps: <code>ip dhcp snooping</code> globally; <code>ip dhcp snooping trust</code> on the trusted ports; <code>ip dhcp snooping limit rate</code> on the untrusted ones; and <code>ip dhcp snooping vlan</code> for the VLANs to protect. Snooping does nothing in a VLAN that isn't listed.</p>
+        <h3 class="sub">HQ&#x27;s trusted ports</h3>
+    <table class="spec">
+      <thead><tr><th>Switch</th><th>Trusted</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>S1</td><td>Po2 (to D1), Po1 (to S2)</td><td>R1&#x27;s replies come back through D1&#x27;s relay</td></tr>
+        <tr><td>S2</td><td>Po3 (to D1), Po1 (to S1)</td><td>The same, from S2&#x27;s side</td></tr>
+        <tr><td>S3</td><td>G0/1 (to R2)</td><td>R2 is Shipping&#x27;s DHCP server</td></tr>
+      </tbody>
+    </table>
+    <ul class="obj-list">
+      <li><strong>Po1 is trusted at both ends.</strong> Normally S2&#x27;s end is blocking, but if Po3 failed, S2&#x27;s clients would get their replies through S1, over Po1. An untrusted Po1 would break DHCP exactly when the backup path is needed.</li>
+      <li><strong>Trust goes on the port-channel</strong>, never on its member ports one by one. A bundle is configured as one interface (Session 5).</li>
+      <li><strong>Every edge port stays untrusted</strong> (the default), with a rate limit of 6 DHCP packets a second: plenty for one PC, far below what a starvation tool sends. Over the limit, the port is err-disabled (Reason <code>dhcp-rate-limit</code> in <code>show interfaces status err-disabled</code>). Trusted ports have no limit.</li>
+    </ul>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S2 · DHCP snooping, with the VLAN line last (S1 is the same, trusting Po2 and Po1)</span></div>
+      <div class="terminal-body"><span class="prompt">S2#</span> <span class="cmd">configure terminal</span>
+<span class="prompt">S2(config)#</span> <span class="cmd">ip dhcp snooping</span>
+<span class="comment">! Real IOS: stop the switch adding option 82 (see below)</span>
+<span class="prompt">S2(config)#</span> <span class="cmd">no ip dhcp snooping information option</span>
+<span class="comment">! The two port-channels toward D1 and S1 carry the real server&#x27;s replies</span>
+<span class="prompt">S2(config)#</span> <span class="cmd">interface port-channel 3</span>
+<span class="prompt">S2(config-if)#</span> <span class="cmd">ip dhcp snooping trust</span>
+<span class="prompt">S2(config-if)#</span> <span class="cmd">interface port-channel 1</span>
+<span class="prompt">S2(config-if)#</span> <span class="cmd">ip dhcp snooping trust</span>
+<span class="prompt">S2(config-if)#</span> <span class="cmd">exit</span>
+<span class="comment">! Every edge port stays untrusted (the default), with a rate limit</span>
+<span class="prompt">S2(config)#</span> <span class="cmd">interface range f0/1 - 22</span>
+<span class="prompt">S2(config-if-range)#</span> <span class="cmd">ip dhcp snooping limit rate 6</span>
+<span class="prompt">S2(config-if-range)#</span> <span class="cmd">exit</span>
+<span class="comment">! Last: turn it on for the user VLANs</span>
+<span class="prompt">S2(config)#</span> <span class="cmd">ip dhcp snooping vlan 10,30</span>
+<span class="prompt">S2(config)#</span> <span class="cmd">end</span></div>
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S3 · Shipping trusts its uplink to R2</span></div>
+      <div class="terminal-body"><span class="prompt">S3#</span> <span class="cmd">configure terminal</span>
+<span class="prompt">S3(config)#</span> <span class="cmd">ip dhcp snooping</span>
+<span class="prompt">S3(config)#</span> <span class="cmd">no ip dhcp snooping information option</span>
+<span class="comment">! The uplink to R2, Shipping&#x27;s DHCP server</span>
+<span class="prompt">S3(config)#</span> <span class="cmd">interface g0/1</span>
+<span class="prompt">S3(config-if)#</span> <span class="cmd">ip dhcp snooping trust</span>
+<span class="prompt">S3(config-if)#</span> <span class="cmd">exit</span>
+<span class="prompt">S3(config)#</span> <span class="cmd">interface range f0/1 - 24 , g0/2</span>
+<span class="prompt">S3(config-if-range)#</span> <span class="cmd">ip dhcp snooping limit rate 6</span>
+<span class="prompt">S3(config-if-range)#</span> <span class="cmd">exit</span>
+<span class="prompt">S3(config)#</span> <span class="cmd">ip dhcp snooping vlan 20</span>
+<span class="prompt">S3(config)#</span> <span class="cmd">end</span></div>
+    </div>
+    <div class="teach-note">
+      <span class="label">The option 82 line</span>
+      Not on Module 11&#x27;s list, but needed on real switches. By default a snooping switch adds a tag (DHCP option 82) to each client request, saying which switch and port it came from, and leaves the relay-address field at zero. D1&#x27;s relay and R2&#x27;s server treat that combination as suspicious and drop the request, so every new lease would fail. <code>no ip dhcp snooping information option</code> on the three access switches stops the tag, so D1, R1 and R2 need no change.
+    </div>
+    <p>Then every DHCP client renews, so the switches watch a full exchange and record a binding: PC-C and PC-D at HQ, PC-B at Shipping.</p>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">PC-C, PC-D and PC-B · renew under snooping</span></div>
+      <div class="terminal-body"><span class="prompt">C:\&gt;</span> <span class="cmd">ipconfig /release</span>
+<span class="prompt">C:\&gt;</span> <span class="cmd">ipconfig /renew</span></div>
+    </div>
+    <p><strong>What snooping doesn&#x27;t cover:</strong> DHCPv6 and router advertisements. PC-B&#x27;s SLAAC and stateless DHCPv6, and Session 7&#x27;s stray-router warning, are untouched. The IPv6 equivalents (RA Guard, DHCPv6 Guard) are beyond this course.</p>
+
+        <h3 class="sub">Verify</h3>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S2 · snooping on, the trusted ports, the rate limits</span></div>
+      <div class="terminal-body"><span class="prompt">S2#</span> <span class="cmd">show ip dhcp snooping</span>
+<span class="out">Switch DHCP snooping is enabled</span>
+<span class="out">DHCP snooping is configured on following VLANs:</span>
+<span class="out">10,30</span>
+<span class="hl">DHCP snooping is operational on following VLANs:</span>
+<span class="out">10,30</span>
+<span class="out">DHCP snooping is configured on the following L3 Interfaces:</span>
+
+<span class="hl">Insertion of option 82 is disabled</span>
+<span class="out">   circuit-id default format: vlan-mod-port</span>
+<span class="out">   remote-id: 0002.16aa.0012 (MAC)</span>
+<span class="out">Option 82 on untrusted port is not allowed</span>
+<span class="out">Verification of hwaddr field is enabled</span>
+<span class="out">Verification of giaddr field is enabled</span>
+<span class="out">DHCP snooping trust/rate is configured on the following Interfaces:</span>
+
+<span class="out">Interface                  Trusted    Allow option    Rate limit (pps)</span>
+<span class="out">-----------------------    -------    ------------    ----------------</span>
+<span class="out">FastEthernet0/1            no         no              6</span>
+<span class="out">  Custom circuit-ids:</span>
+<span class="out">FastEthernet0/2            no         no              6</span>
+<span class="out">  Custom circuit-ids:</span>
+<span class="out">...</span>
+<span class="out">FastEthernet0/22           no         no              6</span>
+<span class="out">  Custom circuit-ids:</span>
+<span class="hl">Port-channel1              yes        yes             unlimited</span>
+<span class="out">  Custom circuit-ids:</span>
+<span class="hl">Port-channel3              yes        yes             unlimited</span>
+<span class="out">  Custom circuit-ids:</span></div>
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S2 · the binding table</span></div>
+      <div class="terminal-body"><span class="prompt">S2#</span> <span class="cmd">show ip dhcp snooping binding</span>
+<span class="out">MacAddress          IpAddress        Lease(sec)  Type           VLAN  Interface</span>
+<span class="out">------------------  ---------------  ----------  -------------  ----  --------------------</span>
+<span class="hl">00:E0:F7:0C:00:11   192.168.10.101   86367       dhcp-snooping   10    FastEthernet0/1</span>
+<span class="hl">00:90:2B:5D:00:30   192.168.30.10    86372       dhcp-snooping   30    FastEthernet0/11</span>
+<span class="out">Total number of bindings: 2</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong>"Configured" vs "operational":</strong> a VLAN is operational only if it exists on the switch. Typing <code>ip dhcp snooping vlan</code> for a VLAN the switch doesn&#x27;t have does nothing.</li>
+      <li><strong><code>Insertion of option 82 is disabled</code></strong> is the proof of the option 82 line.</li>
+      <li><strong>The binding table is the payoff:</strong> each client&#x27;s MAC, IP, lease time, VLAN and port. Dynamic ARP Inspection reads it. PC-C and PC-D got their old addresses back; 86400 seconds is the one-day lease, counting down.</li>
+      <li><strong><code>Verification of hwaddr field is enabled</code></strong> is snooping&#x27;s MAC check. On an untrusted port, a request whose client MAC doesn&#x27;t match the frame&#x27;s source is dropped. That stops a starvation tool that keeps one real source MAC, which port security can&#x27;t.</li>
+      <li><strong>Who&#x27;s missing:</strong> PC-A. It&#x27;s static, so it never ran DHCP. Snooping doesn&#x27;t block it; it just knows nothing about it. That will matter for DAI. SRV1 at Shipping is the same.</li>
+    </ul>
+
+        <h3 class="sub">Two rogue servers at Shipping</h3>
+    <p>Session 6 warned about the home router plugged in by a LAN port, and Session 8 showed what PC-B would get. Now:</p>
+    <div class="teach-note warn">
+      <span class="label">Illustration</span>
+      What the switch would log. The course network never did this.
+    </div>
+    <p><strong>Case 1: the home router moves to a LAN port.</strong> Its LAN side has a different MAC from the internet port stuck on F0/3, so <strong>port security catches it first</strong>:</p>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S3 · port security gets there first</span></div>
+      <div class="terminal-body"><span class="out">%PM-4-ERR_DISABLE: psecure-violation error detected on Fa0/3, putting Fa0/3 in err-disable state</span>
+<span class="hl">%PORT_SECURITY-2-PSECURE_VIOLATION: Security violation occurred, caused by MAC address 0001.97e1.0004 on port FastEthernet0/3.</span>
+<span class="out">%LINEPROTO-5-UPDOWN: Line protocol on Interface FastEthernet0/3, changed state to down</span>
+<span class="out">%LINK-3-UPDOWN: Interface FastEthernet0/3, changed state to down</span></div>
+    </div>
+    <p><strong>Case 2: an allowed device starts answering DHCP.</strong> Someone turns on SRV1&#x27;s own DHCP service. SRV1&#x27;s MAC is the sticky one, so port security has no objection. <strong>Only snooping can stop this one.</strong> S3 drops the offer, because F0/2 is untrusted; newer IOS versions also log it:</p>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S3 · an OFFER on an untrusted port</span></div>
+      <div class="terminal-body"><span class="hl">%DHCP_SNOOPING-5-DHCP_SNOOPING_UNTRUSTED_PORT: DHCP_SNOOPING drop message on untrusted port, message type: DHCPOFFER, MAC sa: 0001.64a2.0100</span></div>
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">PC-B · still R2&#x27;s lease</span></div>
+      <div class="terminal-body"><span class="prompt">C:\&gt;</span> <span class="cmd">ipconfig /all</span>
+<span class="out">...</span>
+<span class="out">   Physical Address................: 0060.70AA.0020</span>
+<span class="out">...</span>
+<span class="hl">   IPv4 Address....................: 192.168.20.102</span>
+<span class="out">   Subnet Mask.....................: 255.255.255.0</span>
+<span class="out">   Default Gateway.................: FE80::2</span>
+<span class="out">                                     192.168.20.1</span>
+<span class="hl">   DHCP Servers....................: 192.168.20.1</span>
+<span class="out">...</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong>R2&#x27;s offer came in on G0/1, which is trusted, and went through.</strong> PC-B has the same lease Session 7 printed. Compare Session 8&#x27;s rogue result: <code>192.168.0.100</code> from <code>192.168.0.1</code>.</li>
+      <li><strong>SRV1 is a server, but not <em>the DHCP server</em>.</strong> "Trust the server ports" means ports toward DHCP servers. Shipping&#x27;s DHCP server is R2, behind G0/1.</li>
+      <li><strong>Two questions, two features.</strong> Port security asks "is this the right device?". Snooping asks "is this device allowed to answer DHCP?". Case 1 fails the first; Case 2 fails only the second.</li>
+    </ul>
+
+  </section>
+
+  <!-- DAI -->
+  <section id="dai">
+    <div class="section-head">
+      <p class="kicker">Module 11.4</p>
+      <h2>Dynamic ARP Inspection</h2>
+      <p>DAI checks every ARP message that arrives on an untrusted port against the DHCP snooping binding table. If the IP-to-MAC pairing in the ARP message isn't in the table, the message is dropped and logged. A forged "the gateway is at my MAC", like Session 8's, is dropped before any host sees it, in every VLAN where DAI runs.</p>
+    </div>
+    <ul class="obj-list">
+      <li><strong>DAI needs DHCP snooping.</strong> The binding table is its list of who really has which address. Enable snooping first, on the same VLANs.</li>
+      <li><strong>Trust the same ports</strong> for ARP as for DHCP: uplinks toward other switches and the gateway trusted, access ports untrusted.</li>
+      <li><strong>It also rate-limits ARP</strong> on untrusted ports, and err-disables a port that goes over.</li>
+      <li><strong>Optional extra checks</strong> with <code>ip arp inspection validate</code>: the source MAC, the destination MAC, and invalid IP addresses. Only one <code>validate</code> line is kept, so all the checks you want go on the same line.</li>
+    </ul>
+        <h3 class="sub">VLAN 30 only</h3>
+    <ul class="obj-list">
+      <li><strong>Every VLAN 30 host leases its address</strong>, so every one has a binding.</li>
+      <li><strong>VLAN 10 has PC-A</strong>, static all term, with no binding: DAI would drop every ARP it sends. Allowing a static host needs an ARP ACL, which is beyond this course.</li>
+      <li><strong>Shipping&#x27;s VLAN 20</strong> has SRV1 and S3&#x27;s own address, both static, so S3 gets no DAI. VLAN 99 has no hosts.</li>
+      <li><strong>The trunks are trusted</strong> for DAI as for snooping: D1&#x27;s SVI, <code>192.168.30.1</code>, is static too, and its ARP replies arrive over Po3 (or Po1).</li>
+    </ul>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S2 · DAI on VLAN 30 (S1 is the same, trusting Po2 and Po1)</span></div>
+      <div class="terminal-body"><span class="prompt">S2#</span> <span class="cmd">configure terminal</span>
+<span class="prompt">S2(config)#</span> <span class="cmd">ip arp inspection vlan 30</span>
+<span class="prompt">S2(config)#</span> <span class="cmd">ip arp inspection validate src-mac dst-mac ip</span>
+<span class="comment">! D1&#x27;s SVI (192.168.30.1) is static, so it has no binding. Its ARPs arrive on the trunks.</span>
+<span class="prompt">S2(config)#</span> <span class="cmd">interface port-channel 3</span>
+<span class="prompt">S2(config-if)#</span> <span class="cmd">ip arp inspection trust</span>
+<span class="prompt">S2(config-if)#</span> <span class="cmd">interface port-channel 1</span>
+<span class="prompt">S2(config-if)#</span> <span class="cmd">ip arp inspection trust</span>
+<span class="prompt">S2(config-if)#</span> <span class="cmd">end</span>
+<span class="prompt">S2#</span> <span class="cmd">copy running-config startup-config</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong><code>validate</code> takes all its checks on one line.</strong> A second <code>validate</code> line replaces the first. The checks: <strong>src-mac</strong> (the Ethernet source matches the ARP sender), <strong>dst-mac</strong> (the Ethernet destination matches the ARP target, on replies) and <strong>ip</strong> (no 0.0.0.0, broadcast or multicast addresses in the ARP body).</li>
+      <li><strong>DAI rate-limits ARP too:</strong> 15 packets a second by default on untrusted ports, then err-disable. HQ keeps the default.</li>
+      <li><strong>S1 gets DAI on VLAN 30</strong> although no live S1 port is in VLAN 30, so the day one is unparked, it&#x27;s covered.</li>
+    </ul>
+
+        <h3 class="sub">Verify</h3>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S2 · DAI active on VLAN 30, all three checks on</span></div>
+      <div class="terminal-body"><span class="prompt">S2#</span> <span class="cmd">show ip arp inspection vlan 30</span>
+
+<span class="out">Source Mac Validation      : Enabled</span>
+<span class="out">Destination Mac Validation : Enabled</span>
+<span class="out">IP Address Validation      : Enabled</span>
+
+<span class="out"> Vlan     Configuration    Operation   ACL Match          Static ACL</span>
+<span class="out"> ----     -------------    ---------   ---------          ----------</span>
+<span class="hl">   30     Enabled          Active</span>
+
+<span class="out"> Vlan     ACL Logging      DHCP Logging      Probe Logging</span>
+<span class="out"> ----     -----------      ------------      -------------</span>
+<span class="out">   30     Deny             Deny              Off</span></div>
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S2 · the trunks trusted, the desks rate-limited</span></div>
+      <div class="terminal-body"><span class="prompt">S2#</span> <span class="cmd">show ip arp inspection interfaces</span>
+
+<span class="out"> Interface        Trust State     Rate (pps)    Burst Interval</span>
+<span class="out"> ---------------  -----------     ----------    --------------</span>
+<span class="out"> Fa0/1            Untrusted               15                 1</span>
+<span class="out"> ...</span>
+<span class="out"> Fa0/11           Untrusted               15                 1</span>
+<span class="out"> ...</span>
+<span class="hl">Po1              Trusted               None               N/A</span>
+<span class="hl">Po3              Trusted               None               N/A</span></div>
+    </div>
+    <p><strong>What DAI stops.</strong> No stranger can reach VLAN 30 any more: F0/11 sticks to PC-D, and the rest are parked. So the attack would have to come from PC-D itself, a legitimate PC with malware on it, sending gratuitous ARPs that say "192.168.30.1 is at my MAC". PC-D&#x27;s MAC is the allowed one, so port security passes it.</p>
+    <div class="teach-note warn">
+      <span class="label">Illustration</span>
+      What the switch would log. The course network never did this.
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S2 · the forged ARP, dropped</span></div>
+      <div class="terminal-body"><span class="hl">%SW_DAI-4-DHCP_SNOOPING_DENY: 1 Invalid ARPs (Res) on Fa0/11, vlan 30.([0090.2b5d.0030/192.168.30.1/ffff.ffff.ffff/192.168.30.1/...])</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong>Reading the log:</strong> the bracket is sender MAC / sender IP / target MAC / target IP. The sender MAC is PC-D&#x27;s real one, but S2&#x27;s binding says that MAC on F0/11 is <code>192.168.30.10</code>, not <code>.30.1</code>, so the reply is dropped and no other host ever sees it.</li>
+      <li><strong>The layering lesson.</strong> Port security asks "is this the right MAC?" and says yes. DAI asks "is this MAC telling the truth about its IP?" and says no. Each stops what the other can&#x27;t.</li>
+      <li><strong>DAI doesn&#x27;t drop every gratuitous ARP</strong>, only the ones that fail the check. PC-D announcing its own real address is valid and passes.</li>
+      <li><strong>Session 8&#x27;s own ARP attack</strong>, from S1 F0/5 in VLAN 10, is closed by <strong>parking</strong>, not DAI: VLAN 10 has none.</li>
+    </ul>
+
+  </section>
+
+  <!-- PORTFAST BPDU GUARD -->
+  <section id="stpguard">
+    <div class="section-head">
+      <p class="kicker">Module 11.5</p>
+      <h2>PortFast and BPDU Guard</h2>
+      <p>Two features, always used together on access ports. <strong>PortFast</strong> puts a host port straight into forwarding, skipping the wait while STP checks for loops. <strong>BPDU Guard</strong> err-disables that port the moment a BPDU arrives on it, because a port with only a host on it should never hear one.</p>
+    </div>
+    <div class="teach-note callback">
+      <span class="label">Session 4 callback</span>
+      Session 4 showed these commands as syntax, and explained why PortFast on a link to another switch can cause a loop. Here they go on for real, on host ports only.
+    </div>
+        <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S2 · PortFast and BPDU Guard on every edge port (S1 is the same; S3 uses its own range)</span></div>
+      <div class="terminal-body"><span class="prompt">S2#</span> <span class="cmd">configure terminal</span>
+<span class="prompt">S2(config)#</span> <span class="cmd">interface range f0/1 - 22</span>
+<span class="prompt">S2(config-if-range)#</span> <span class="cmd">spanning-tree portfast</span>
+<span class="out">%Warning: portfast should only be enabled on ports connected to a single</span>
+<span class="out"> host. Connecting hubs, concentrators, switches, bridges, etc... to this</span>
+<span class="out"> interface  when portfast is enabled, can cause temporary bridging loops.</span>
+<span class="out"> Use with CAUTION</span>
+
+<span class="out">%Portfast will be configured in 22 interfaces due to the range command</span>
+<span class="out"> but will only have effect when the interfaces are in a non-trunking mode.</span>
+<span class="prompt">S2(config-if-range)#</span> <span class="cmd">spanning-tree bpduguard enable</span>
+<span class="prompt">S2(config-if-range)#</span> <span class="cmd">end</span>
+<span class="prompt">S2#</span> <span class="cmd">copy running-config startup-config</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong>Never on Po1–Po3, their member ports, or S3 G0/1.</strong> The range simply leaves them out.</li>
+      <li><strong>The warning is normal.</strong> IOS reminds you that PortFast on a port with a switch behind it can cause a loop. That&#x27;s exactly what BPDU Guard guards against.</li>
+    </ul>
+    <p>The other way, which Session 4 also printed. HQ doesn&#x27;t use it, but it gives the same protection: <code>portfast default</code> covers every port in access mode, and <code>portfast bpduguard default</code> covers every port running PortFast (not "every access port", as NetAcad&#x27;s slide puts it).</p>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">The global alternative</span></div>
+      <div class="terminal-body"><span class="prompt">S2(config)#</span> <span class="cmd">spanning-tree portfast default</span>
+<span class="prompt">S2(config)#</span> <span class="cmd">spanning-tree portfast bpduguard default</span></div>
+    </div>
+    <h3 class="sub">Verify</h3>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S2 · the global defaults are off, correctly</span></div>
+      <div class="terminal-body"><span class="prompt">S2#</span> <span class="cmd">show spanning-tree summary</span>
+<span class="out">Switch is in rapid-pvst mode</span>
+<span class="out">Root bridge for: none</span>
+<span class="out">Extended system ID           is enabled</span>
+<span class="hl">Portfast Default             is disabled</span>
+<span class="hl">PortFast BPDU Guard Default  is disabled</span>
+<span class="out">Portfast BPDU Filter Default is disabled</span>
+<span class="out">Loopguard Default            is disabled</span>
+<span class="out">EtherChannel misconfig guard is enabled</span>
+<span class="out">UplinkFast                   is disabled</span>
+<span class="out">BackboneFast                 is disabled</span>
+<span class="out">Configured Pathcost method used is short</span>
+<span class="out">...</span></div>
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S2 · PC-D&#x27;s port in detail</span></div>
+      <div class="terminal-body"><span class="prompt">S2#</span> <span class="cmd">show spanning-tree interface f0/11 detail</span>
+<span class="out"> Port 11 (FastEthernet0/11) of VLAN0030 is designated forwarding</span>
+<span class="out">   Port path cost 19, Port priority 128, Port Identifier 128.11.</span>
+<span class="out">   Designated root has priority 24606, address 00d0.97cc.00d1</span>
+<span class="out">   Designated bridge has priority 32798, address 0002.16aa.0012</span>
+<span class="out">   Designated port id is 128.11, designated path cost 3</span>
+<span class="out">   Timers: message age 0, forward delay 0, hold 0</span>
+<span class="out">   Number of transitions to forwarding state: 1</span>
+<span class="hl">   The port is in the portfast mode</span>
+<span class="out">   Link type is point-to-point by default</span>
+<span class="hl">   Bpdu guard is enabled</span>
+<span class="out">   BPDU: sent ..., received 0</span></div>
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S2 · Edge in the spanning tree</span></div>
+      <div class="terminal-body"><span class="prompt">S2#</span> <span class="cmd">show spanning-tree vlan 30</span>
+<span class="out">...</span>
+<span class="out">Interface        Role Sts Cost      Prio.Nbr Type</span>
+<span class="out">---------------- ---- --- --------- -------- --------------------------------</span>
+<span class="hl">Fa0/11           Desg FWD 19        128.11   P2p Edge</span>
+<span class="out">Po1              Altn BLK 9         128.27   P2p</span>
+<span class="out">Po3              Root FWD 3         128.29   P2p</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong><code>Portfast Default is disabled</code> is correct here.</strong> NetAcad suggests <code>show running-config | begin span</code> and <code>show spanning-tree summary</code>, but both show only the <em>global</em> defaults. HQ set PortFast per port, so check a port with <code>show spanning-tree interface … detail</code> or <code>show running-config interface</code>.</li>
+      <li><strong><code>P2p Edge</code></strong> is how Rapid PVST+ shows a PortFast port: it calls it an <strong>edge port</strong>, which goes straight to forwarding (Session 5). NetAcad&#x27;s "skips listening and learning" is the older 802.1D wording for the same idea.</li>
+      <li><code>BPDU: … received 0</code> is what a healthy desk port should show.</li>
+    </ul>
+
+        <h3 class="sub">A switch at a desk</h3>
+    <p>Someone at PC-D&#x27;s desk plugs in a small managed switch, to share the jack with a printer. The small switch runs STP, and sends BPDUs as soon as its link comes up.</p>
+    <div class="teach-note warn">
+      <span class="label">Illustration</span>
+      What the switch would log. The course network never did this.
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S2 · BPDU Guard fires</span></div>
+      <div class="terminal-body"><span class="hl">%SPANTREE-2-BLOCK_BPDUGUARD: Received BPDU on port Fa0/11 with BPDU Guard enabled. Disabling port.</span>
+<span class="out">%PM-4-ERR_DISABLE: bpduguard error detected on Fa0/11, putting Fa0/11 in err-disable state</span>
+<span class="out">%LINEPROTO-5-UPDOWN: Line protocol on Interface FastEthernet0/11, changed state to down</span>
+<span class="out">%LINK-3-UPDOWN: Interface FastEthernet0/11, changed state to down</span></div>
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S2 · the reason column</span></div>
+      <div class="terminal-body"><span class="prompt">S2#</span> <span class="cmd">show interfaces status err-disabled</span>
+
+<span class="out">Port      Name               Status       Reason               Err-disabled Vlans</span>
+<span class="hl">Fa0/11                       err-disabled bpduguard</span></div>
+    </div>
+    <p>Recovery, once the small switch is gone and PC-D is plugged straight back in:</p>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S2 · bring the desk back</span></div>
+      <div class="terminal-body"><span class="prompt">S2#</span> <span class="cmd">configure terminal</span>
+<span class="prompt">S2(config)#</span> <span class="cmd">interface f0/11</span>
+<span class="prompt">S2(config-if)#</span> <span class="cmd">shutdown</span>
+<span class="prompt">S2(config-if)#</span> <span class="cmd">no shutdown</span>
+<span class="prompt">S2(config-if)#</span> <span class="cmd">end</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong>Read the Reason column.</strong> Two features can err-disable a desk port: <code>bpduguard</code> (a BPDU arrived) and <code>psecure-violation</code> (a second MAC arrived). Which fires first depends on what the device sends first. Either way the desk is cut off until someone looks, and the Reason column says why.</li>
+      <li><strong>Session 8&#x27;s fake root</strong> would meet the same fate on any desk port. The election it won in Session 8 never happens: no root bridge at a desk.</li>
+      <li><strong>Automatic recovery</strong> (beyond this course): <code>errdisable recovery cause bpduguard</code> re-enables the port on a timer. NetAcad&#x27;s slide gives the cause as <code>psecure_violation</code>, which is wrong: that would recover port-security shutdowns (and is spelled <code>psecure-violation</code>). HQ doesn&#x27;t use automatic recovery: a desk that keeps re-enabling keeps letting the same device back on.</li>
+    </ul>
+
+  </section>
+
+  <!-- CDP EDGE -->
+  <section id="cdpedge">
+    <div class="section-head">
+      <p class="kicker">Module 10 follow-up</p>
+      <h2>CDP off on the desk ports</h2>
+      <p>Session 8 showed what CDP gives away to anyone on a desk port, and said HQ would turn it off there in this session. The trunks keep it.</p>
+    </div>
+        <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · CDP off on every edge port (S2 is the same; S3 keeps it on G0/1)</span></div>
+      <div class="terminal-body"><span class="prompt">S1#</span> <span class="cmd">configure terminal</span>
+<span class="prompt">S1(config)#</span> <span class="cmd">interface range f0/1 - 22</span>
+<span class="prompt">S1(config-if-range)#</span> <span class="cmd">no cdp enable</span>
+<span class="prompt">S1(config-if-range)#</span> <span class="cmd">end</span>
+<span class="prompt">S1#</span> <span class="cmd">copy running-config startup-config</span></div>
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · only the links between switches still speak CDP</span></div>
+      <div class="terminal-body"><span class="prompt">S1#</span> <span class="cmd">show cdp interface</span>
+<span class="hl">FastEthernet0/23 is up, line protocol is up</span>
+<span class="out">  Encapsulation ARPA</span>
+<span class="out">  Sending CDP packets every 60 seconds</span>
+<span class="out">  Holdtime is 180 seconds</span>
+<span class="hl">FastEthernet0/24 is up, line protocol is up</span>
+<span class="out">  Encapsulation ARPA</span>
+<span class="out">  Sending CDP packets every 60 seconds</span>
+<span class="out">  Holdtime is 180 seconds</span>
+<span class="hl">GigabitEthernet0/1 is up, line protocol is up</span>
+<span class="out">  Encapsulation ARPA</span>
+<span class="out">  Sending CDP packets every 60 seconds</span>
+<span class="out">  Holdtime is 180 seconds</span>
+<span class="hl">GigabitEthernet0/2 is up, line protocol is up</span>
+<span class="out">  Encapsulation ARPA</span>
+<span class="out">  Sending CDP packets every 60 seconds</span>
+<span class="out">  Holdtime is 180 seconds</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong>Only the four inter-switch cables remain:</strong> Po1&#x27;s two members to S2 and Po2&#x27;s two to D1. CDP runs per physical port, never on the port-channel.</li>
+      <li><strong>The payoff:</strong> a desk port no longer hands S1&#x27;s management address, model and IOS version to whoever plugs in. <code>show cdp neighbors</code> still shows S2 and D1, and the native VLAN mismatch warning still works on every trunk.</li>
+      <li><strong>LLDP:</strong> nothing to do. It&#x27;s off by default on Catalyst switches.</li>
+    </ul>
+
+  </section>
+
+  <!-- CASE CLOSED -->
+  <section id="casefile">
+    <div class="section-head">
+      <p class="kicker">Case File D-06</p>
+      <h2>Case closed: The Impostor</h2>
+      <p>Every trick on Session 8's card, and what stops it now.</p>
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S2 · PC-D&#x27;s desk port: every layer in one place</span></div>
+      <div class="terminal-body"><span class="prompt">S2#</span> <span class="cmd">show running-config interface f0/11</span>
+<span class="out">Building configuration...</span>
+
+<span class="out">Current configuration : ...</span>
+<span class="comment">!</span>
+<span class="out">interface FastEthernet0/11</span>
+<span class="out"> switchport access vlan 30</span>
+<span class="out"> switchport mode access</span>
+<span class="out"> switchport port-security</span>
+<span class="out"> switchport port-security mac-address sticky</span>
+<span class="out"> switchport port-security mac-address sticky 0090.2b5d.0030</span>
+<span class="out"> no cdp enable</span>
+<span class="out"> spanning-tree portfast</span>
+<span class="out"> spanning-tree bpduguard enable</span>
+<span class="out"> ip dhcp snooping limit rate 6</span>
+<span class="out">end</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong>Read it as a list of what each line stops:</strong> <code>mode access</code>, VLAN hopping; <code>port-security</code> and <code>sticky</code>, MAC flooding and any device that isn&#x27;t PC-D; <code>no cdp enable</code>, reconnaissance; <code>portfast</code>, no wait at boot; <code>bpduguard</code>, a switch or fake root at the desk; <code>limit rate 6</code>, a DHCP flood.</li>
+      <li><strong>What the port doesn&#x27;t show:</strong> it&#x27;s untrusted for snooping and DAI, which is the default, so there&#x27;s no line for it. DAI on VLAN 30 is a switch-wide line.</li>
+    </ul>
+        <div class="wanted">
+      <span class="threat">STATUS: CONTAINED</span>
+      <p class="eyebrow">CASE FILE D-06</p>
+      <h3>The Impostor</h3>
+      <p class="mo">Every empty jack is shut, and every desk knows its PC. It can&#x27;t flood a table, hand out addresses, forge the gateway in VLAN 30, or claim the root. What&#x27;s left needs an inside job: a PC that&#x27;s already allowed, in a VLAN with no ARP inspection, or anything that speaks IPv6 router advertisements.</p>
+      <p class="tell"><strong>Tell, now:</strong> an err-disabled desk port in <code>show interfaces status err-disabled</code>, with its Reason; a violation count in <code>show port-security</code>; a drop in <code>show ip arp inspection statistics</code>.</p>
+      <p class="xref">See also: <a href="IT141_Session08.html#exposure">Session 8&#x27;s exposure map</a> · <a href="#trustdrill">Trust or not?</a></p>
+    </div>
+    <table class="spec">
+      <thead><tr><th>Trick (Session 8)</th><th>Stopped by</th><th>Still open</th></tr></thead>
+      <tbody>
+        <tr><td>MAC address flooding</td><td>Port security, max 1 sticky: the first made-up address shuts the port. Every unused port parked.</td><td>Nothing at a desk</td></tr>
+        <tr><td>VLAN hopping, double-tagging</td><td>The five steps, done since Session 2</td><td>Nothing</td></tr>
+        <tr><td>DHCP starvation</td><td>Port security (a second source MAC shuts the port), and snooping&#x27;s MAC check: a request whose client MAC doesn&#x27;t match the frame&#x27;s source is dropped on an untrusted port. The rate limit slows anything that&#x27;s left.</td><td>Nothing at a desk</td></tr>
+        <tr><td>DHCP spoofing</td><td>Snooping: OFFERs only on trusted ports</td><td>IPv6 RAs and DHCPv6 (beyond this course)</td></tr>
+        <tr><td>ARP spoofing and poisoning</td><td>DAI on VLAN 30; parking closes Session 8&#x27;s VLAN 10 jack</td><td><strong>A compromised PC in VLAN 10 or at Shipping</strong>: no DAI there, because of the static hosts</td></tr>
+        <tr><td>MAC and IP spoofing</td><td>Partly: port security flags a known MAC on a second secure port</td><td>IP Source Guard is named only</td></tr>
+        <tr><td>STP manipulation</td><td>BPDU Guard on every desk port</td><td>Nothing at a desk</td></tr>
+        <tr><td>CDP reconnaissance</td><td>CDP off on every desk port</td><td>Nothing at a desk</td></tr>
+      </tbody>
+    </table>
+    <div class="teach-note">
+      <span class="label">Debrief</span>
+      Snooping and DAI have the same rule for every port: trusted or untrusted. What happens if an access port is marked trusted by mistake, and what happens if an uplink is left untrusted? <em>(A trusted access port lets a rogue DHCP server, or forged ARPs, through it unchecked: The Impostor signs for the real server. An untrusted uplink blocks the real server&#x27;s OFFERs, or the gateway&#x27;s ARP replies, so new clients get no lease and VLAN 30 loses its gateway. One mistake opens a door; the other locks out the people who belong.)</em>
+    </div>
+
+  </section>
+
+  <!-- TRUST DRILL -->
+  <section id="trustdrill">
+    <div class="section-head">
+      <p class="kicker">Drill</p>
+      <h2>Trust or not?</h2>
+      <p>A port on this network, and a feature. Should the port be trusted?</p>
+    </div>
+    <div class="tool" id="truTool">
+      <p class="tool-title">Drill · Trust or not?</p>
+      <div class="sorter-case" id="truCase"></div>
+      <div class="sorter-btns" id="truBtns"></div>
+      <div class="tool-out" id="truOut"></div>
+      <div class="toolbar" style="margin:12px 0 0;">
+        <button class="btn" id="truNext">Next port</button>
+        <span id="truScore" style="font-family:var(--mono); font-size:.85rem; opacity:.75;"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- MISTAKES -->
+  <section id="mistakes">
+    <div class="section-head">
+      <p class="kicker">Watch for this</p>
+      <h2>Common Module 11 mistakes</h2>
+      <p>Most Module 11 faults are a feature switched on but not pointed anywhere, or the trust setting on the wrong side of a link.</p>
+    </div>
+        <h3 class="sub">1 · Snooping on, but no VLAN</h3>
+    <p><code>ip dhcp snooping</code> alone does nothing. Without <code>ip dhcp snooping vlan</code>, nothing is filtered and the binding table stays empty. <code>show ip dhcp snooping</code> shows an empty VLAN list.</p>
+    <h3 class="sub">2 · The uplink left untrusted</h3>
+    <p>The real server&#x27;s OFFERs are dropped like a rogue&#x27;s: new clients get 169.254. Check the trusted list in <code>show ip dhcp snooping</code>.</p>
+    <h3 class="sub">3 · Trust on the member ports</h3>
+    <p>On a bundle, trust goes on the port-channel. <code>show ip dhcp snooping</code> should list <code>Port-channel3</code>, not <code>GigabitEthernet0/1</code>.</p>
+    <h3 class="sub">4 · Option 82 left on (real switches)</h3>
+    <p>Relayed HQ clients and Shipping&#x27;s clients get no lease. <code>show ip dhcp snooping</code> says <code>Insertion of option 82 is enabled</code>.</p>
+    <h3 class="sub">5 · DAI before the clients renewed</h3>
+    <p>PC-D has no binding yet, so DAI drops its ARPs and it loses its gateway. Order: snooping, renew, check the bindings, then DAI.</p>
+    <h3 class="sub">6 · DAI on a VLAN with static hosts</h3>
+    <p>On VLAN 10, every ARP from PC-A would be dropped. The drop counter in <code>show ip arp inspection statistics</code> climbs.</p>
+    <h3 class="sub">7 · <code>validate</code> on three lines</h3>
+    <p>Only the last one counts. <code>show ip arp inspection vlan 30</code> shows two of the three checks disabled.</p>
+    <h3 class="sub">8 · Sticky, never saved</h3>
+    <p>After a reload, the desk sticks to whatever is plugged in next. The sticky line is in <code>show running-config</code> but not <code>show startup-config</code>.</p>
+    <h3 class="sub">9 · A new PC at a sticky desk</h3>
+    <p>The port err-disables for a legitimate swap. Remove the old sticky line, then <code>shutdown</code> and <code>no shutdown</code>.</p>
+    <h3 class="sub">10 · BPDU Guard on an uplink</h3>
+    <p>Typed on a trunk or port-channel, it err-disables the link at D1&#x27;s first BPDU, and the switch loses its root port. Reason <code>bpduguard</code> in <code>show interfaces status err-disabled</code>.</p>
+    <h3 class="sub">11 · Checking PortFast with the summary</h3>
+    <p><code>show spanning-tree summary</code> shows only the global defaults. Per-port PortFast is in <code>show spanning-tree interface … detail</code>.</p>
+    <h3 class="sub">12 · A rate limit on the trusted uplink</h3>
+    <p>Under load the uplink err-disables, and the whole switch loses DHCP. Trusted ports should show <code>unlimited</code>.</p>
+
+  </section>
+
+  <!-- WHAT WORKS NOW -->
+  <section id="reach">
+    <div class="section-head">
+      <p class="kicker">End of session</p>
+      <h2>What works now, and what doesn't</h2>
+      <p>Everything that worked still works. The difference is what happens when something that shouldn't be there is plugged in.</p>
+    </div>
+        <table class="spec">
+      <thead><tr><th>Test</th><th>Result</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Everything that worked at the end of Session 8</td><td><strong>Works</strong></td><td>Every host keeps its port, VLAN and address</td></tr>
+        <tr><td>A laptop on an empty desk jack</td><td><strong>Nothing</strong></td><td>Parked: VLAN 999, shut</td></tr>
+        <tr><td>A laptop swapped in for a desk&#x27;s PC</td><td><strong>Port err-disabled</strong></td><td>Port security, sticky, shutdown</td></tr>
+        <tr><td>A rogue DHCP server on any desk port</td><td><strong>Its offers are dropped</strong></td><td>DHCP snooping</td></tr>
+        <tr><td>A forged ARP in VLAN 30</td><td><strong>Dropped and logged</strong></td><td>DAI</td></tr>
+        <tr><td>A forged ARP in VLAN 10 or at Shipping</td><td>Not checked</td><td>No DAI there: static hosts</td></tr>
+        <tr><td>A switch plugged into a desk</td><td><strong>Port err-disabled</strong></td><td>BPDU Guard</td></tr>
+        <tr><td>CDP on a desk port</td><td>Off</td><td>Only links between switches speak CDP</td></tr>
+        <tr><td>A rogue IPv6 router advertisement</td><td>Not stopped</td><td>RA Guard is beyond this course</td></tr>
+      </tbody>
+    </table>
+
+    <div class="teach-note preview">
+      <span class="label">Coming up in Session 10</span>
+      Modules 12 and 13: the company opens a wireless annex. VLAN 40 gets its gateway, its DHCP pool and its route, and a wireless LAN controller runs the access point from a web page instead of a terminal.
+    </div>
+  </section>
+
+  <!-- THE TICKET -->
+  <section id="ticket">
+    <div class="section-head">
+      <p class="kicker">Recurring segment</p>
+      <h2>The Ticket</h2>
+      <p>Turn it into steps before you open the answer.</p>
+    </div>
+        <div class="ticket-card">
+      <p class="tag">Ticket #141-09 · Priority: normal · From: Front Desk</p>
+      <p>The new hire&#x27;s laptop arrived today. We unplugged the old PC at PC-C&#x27;s old desk and plugged the laptop in where it was. Nothing works, and the little light next to the laptop&#x27;s network port is off. The old PC worked fine there yesterday.</p>
+    </div>
+    <details class="solution"><summary>One way to break it down</summary><div class="solbody">
+      <ol>
+        <li><strong>A new device on a desk that knew its old one</strong>, and a dark port light: port security, sticky, shutdown. Doing exactly what it was set up to do.</li>
+        <li>PC-C&#x27;s desk is S2 F0/1, VLAN 10. That&#x27;s the port to look at.</li>
+        <li>Confirm: <code>show interfaces status err-disabled</code> on S2 should list F0/1 with Reason <code>psecure-violation</code>; <code>show port-security interface f0/1</code> shows <code>Secure-shutdown</code> and the laptop&#x27;s MAC as the last source address.</li>
+        <li>This is a legitimate swap, so the desk has to forget the old PC: <code>no switchport port-security mac-address sticky</code> with the old PC&#x27;s MAC, on F0/1.</li>
+        <li>Then bring the port back: <code>shutdown</code>, <code>no shutdown</code>. The laptop is learned as the new sticky address.</li>
+        <li><code>copy running-config startup-config</code>, or the old address comes back after a reload.</li>
+        <li>Verify: <code>show port-security address</code> lists the laptop&#x27;s MAC on F0/1; the laptop gets a 192.168.10.x lease, and S2&#x27;s snooping binding table lists it.</li>
+      </ol>
+    </div></details>
+
+  </section>
+
+  <!-- CHECKPOINT -->
+  <section id="checkpoint">
+    <div class="section-head">
+      <p class="kicker">Before Session 10</p>
+      <h2>Checkpoint: Module 11</h2>
+      <p>If you can do these cold, you're ready for the Modules 10–13 exam's security half.</p>
+    </div>
+    <ul class="obj-list">
+      <li>Park a range of unused ports with <code>interface range</code></li>
+      <li>Port security from memory: why the port must be access first, <code>maximum</code>, static vs dynamic vs sticky, aging time and type</li>
+      <li>The three violation modes, and what each one does with traffic, syslog, the counter and the port</li>
+      <li>Recognize an err-disabled port, and recover it</li>
+      <li>NetAcad's five steps against VLAN hopping</li>
+      <li>DHCP snooping's four steps; which ports are trusted and why; what the binding table holds</li>
+      <li>Why DAI needs DHCP snooping, which ports it trusts, and <code>ip arp inspection validate</code> on one line</li>
+      <li>PortFast and BPDU Guard, per interface and globally, and why neither goes on a trunk</li>
+      <li><code>show port-security</code> (and <code>interface</code>, <code>address</code>), <code>show ip dhcp snooping</code> (and <code>binding</code>), <code>show ip arp inspection</code>, <code>show spanning-tree summary</code></li>
+    </ul>
+  </section>
+
+  <!-- FLASHCARDS -->
+  <section id="flashcards">
+    <div class="section-head">
+      <p class="kicker">Study</p>
+      <h2>Flashcards</h2>
+      <p>Click to flip. Double-click to mark as known.</p>
+    </div>
+    <div class="toolbar">
+      <button class="btn" id="shuffleBtn">Shuffle</button>
+      <button class="btn" id="resetKnownBtn">Reset progress</button>
+      <span id="cardProgress"></span>
+    </div>
+    <div class="card-grid" id="cardGrid"></div>
+  </section>
+
+  <!-- QUIZ -->
+  <section id="quiz">
+    <div class="section-head">
+      <p class="kicker">Check yourself</p>
+      <h2>Sample questions</h2>
+      <p>Pick an answer to see if you're right. Same style as the module-group exam.</p>
+    </div>
+    <div id="quizScore"></div>
+    <div id="quizList"></div>
+    <button class="btn" id="resetQuizBtn">Reset quiz</button>
+  </section>
+
+  <!-- EXAMPLES -->
+  <section id="examples">
+    <div class="section-head">
+      <p class="kicker">Applied</p>
+      <h2>Worked examples</h2>
+      <p>Think it through before you expand the answer.</p>
+    </div>
+        <div class="example">
+      <span class="tag">Port security</span>
+      <h3>Why did it err-disable?</h3>
+      <p>A desk port has port security with the defaults plus <code>mac-address sticky</code>. Someone unplugs the PC and plugs in a laptop. The port goes err-disabled. Why, and what are two ways the administrator could have prepared for a legitimate swap?</p>
+      <details class="solution"><summary>Show answer</summary><div class="solbody">
+        <p>The defaults are a maximum of 1 and violation mode shutdown. Sticky kept the PC&#x27;s MAC even while the cable was out, so the laptop&#x27;s MAC was a second address: a violation, and the port shut. For a legitimate swap, either remove the old sticky address first (<code>no switchport port-security mac-address sticky</code> <em>old-mac</em>), or allow a second address with <code>maximum 2</code>. After the fact, remove the old address, then <code>shutdown</code> and <code>no shutdown</code>. (Without sticky, the swap would have worked: a dynamic secure address is forgotten when the link goes down.)</p>
+      </div></details>
+    </div>
+    <div class="example">
+      <span class="tag">Sticky</span>
+      <h3>Gone after a reload</h3>
+      <p>An administrator turns on <code>mac-address sticky</code>, sees the addresses in <code>show running-config</code>, and reloads the switch the next morning. The addresses are gone. What was missed?</p>
+      <details class="solution"><summary>Show answer</summary><div class="solbody">
+        <p><code>copy running-config startup-config</code>. Sticky addresses go into the <em>running</em> configuration; only saving it puts them in NVRAM.</p>
+      </div></details>
+    </div>
+    <div class="example">
+      <span class="tag">Snooping</span>
+      <h3>Nobody gets a lease</h3>
+      <p>After DHCP snooping goes on, every client in a VLAN gets 169.254 addresses. Snooping is enabled globally and for the VLAN. What should you check first?</p>
+      <details class="solution"><summary>Show answer</summary><div class="solbody">
+        <p>Which ports are trusted. If the uplink toward the real DHCP server isn't trusted, snooping drops the server's OFFERs on it, exactly as it would a rogue server's. <code>show ip dhcp snooping</code> lists the trusted interfaces.</p>
+      </div></details>
+    </div>
+    <div class="example">
+      <span class="tag">DAI</span>
+      <h3>PC-A can't reach its gateway</h3>
+      <p>Someone turns DAI on for VLAN 10 too. PC-A, with its static address, can no longer reach anything off its subnet, but PC-C, on DHCP, is fine. Why?</p>
+      <details class="solution"><summary>Show answer</summary><div class="solbody">
+        <p>DAI checks ARP against the DHCP snooping binding table, and PC-A never got a lease, so it has no binding. Its ARP messages are dropped as invalid. That's why HQ runs DAI only where every host uses DHCP. (Static hosts can be allowed with ARP ACLs, which are beyond this course.)</p>
+      </div></details>
+    </div>
+    <div class="example">
+      <span class="tag">Trust</span>
+      <h3>The server port</h3>
+      <p>SRV1, the DNS and web server, is on S3 F0/2. It's a server the network team controls. Should its port be trusted for DHCP snooping?</p>
+      <details class="solution"><summary>Show answer</summary><div class="solbody">
+        <p>No. Trust is about the direction of the real <strong>DHCP server</strong>, and SRV1 isn't it; R2 is. If SRV1's port were trusted and someone turned on SRV1's own DHCP service by mistake, it would become a rogue server that snooping lets through.</p>
+      </div></details>
+    </div>
+    <div class="example">
+      <span class="tag">BPDU Guard</span>
+      <h3>Is the uplink at risk?</h3>
+      <p>Someone runs <code>spanning-tree portfast default</code> and <code>spanning-tree portfast bpduguard default</code>. Is the trunk to D1 at risk?</p>
+      <details class="solution"><summary>Show answer</summary><div class="solbody">
+        <p>No. <code>portfast default</code> applies only to ports in access mode, and the global BPDU Guard applies only to PortFast ports, so trunks are left alone. The risk is the per-interface form: <code>spanning-tree bpduguard enable</code> typed on a trunk or port-channel would err-disable it at the next BPDU from D1.</p>
+      </div></details>
+    </div>
+
+  </section>
+
+  <!-- GLOSSARY -->
+  <section id="glossary">
+    <div class="section-head">
+      <p class="kicker">Reference</p>
+      <h2>Glossary &amp; index</h2>
+      <p>Every term from this session. Search, or jump by letter.</p>
+    </div>
+    <input type="text" id="glossarySearch" placeholder="Search terms…" aria-label="Search glossary">
+    <div class="alpha-nav" id="alphaNav"></div>
+    <dl class="glossary" id="glossaryList"></dl>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>IT141 · CCNA: Switching, Routing, and Wireless Essentials · Session 9 reference.</p>
+    <p class="license-note">© 2026 Zan Dick (<a href="https://github.com/KevinSays/osi-company-switching">KevinSays</a>), Mountwest Community &amp; Technical College · Content: <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/">CC BY-NC-SA 4.0</a> · Code: <a href="https://github.com/KevinSays/osi-company-switching/blob/main/LICENSE">MIT</a> · Cisco, NetAcad, CCNA and Packet Tracer are trademarks of Cisco; this site is not affiliated with or endorsed by Cisco.</p>
+  </div>
+</footer>
+<button id="backToTop" class="back-to-top" aria-label="Back to top" title="Back to top">↑</button>
+<script>
+  (function(){
+    /* ---- trust or not? ---- */
+    const CASES = [
+      { p:"S2 F0/11 (PC-D)", f:"DHCP snooping", a:"Untrusted", w:"A desk port. PCs only ever send client messages." },
+      { p:"S2 Po3 (to D1)", f:"DHCP snooping", a:"Trusted", w:"R1's replies come back through D1's relay on this bundle." },
+      { p:"S1 Po2 (to D1)", f:"DAI", a:"Trusted", w:"D1's SVI is static and has no binding, so its ARPs would be dropped on an untrusted port." },
+      { p:"S1 Po1 (to S2)", f:"DHCP snooping", a:"Trusted", w:"A link between two HQ switches. If an uplink fails, DHCP replies arrive this way." },
+      { p:"S2 Po1 (to S1)", f:"DAI", a:"Trusted", w:"The same bundle, the other end. Uplinks to other switches are trusted." },
+      { p:"S3 G0/1 (to R2)", f:"DHCP snooping", a:"Trusted", w:"R2 is Shipping's DHCP server. Its OFFERs and ACKs must get through." },
+      { p:"S3 F0/2 (SRV1)", f:"DHCP snooping", a:"Untrusted", w:"SRV1 is a server, but not the DHCP server. That's R2." },
+      { p:"S3 F0/3 (the home router's internet port)", f:"DHCP snooping", a:"Untrusted", w:"The home router is a DHCP client of R2 here. It never needs to send an OFFER." },
+      { p:"S1 F0/1 (PC-A, static)", f:"DHCP snooping", a:"Untrusted", w:"Static or not, it's a desk. It just never appears in the binding table." },
+      { p:"S2 F0/11 (PC-D)", f:"DAI", a:"Untrusted", w:"Its ARPs are checked against PC-D's binding: .30.10 at its own MAC." },
+      { p:"S2 F0/15 (parked)", f:"DHCP snooping", a:"Untrusted", w:"Every port starts untrusted. Parking doesn't change that, and a desk port is never trusted." },
+      { p:"S3 F0/1 (PC-B)", f:"DHCP snooping", a:"Untrusted", w:"A desk port. Trusting it would let a rogue server there answer all of Shipping." },
+      { p:"S2 Po3 (to D1)", f:"DAI", a:"Trusted", w:"The gateway's replies for 192.168.30.1 arrive here." },
+    ];
+    const caseEl = document.getElementById('truCase'), btns = document.getElementById('truBtns'),
+          out = document.getElementById('truOut'), scoreEl = document.getElementById('truScore');
+    if (!caseEl || !CASES.length) return;
+    let right = 0, done = 0, n = 0, last = -1;
+    function show(){
+      n++;
+      let i; do { i = Math.floor(Math.random()*CASES.length); } while (CASES.length > 1 && i === last);
+      last = i;
+      const c = CASES[i];
+      caseEl.innerHTML = `<span class="count">Port ${n}</span>${c.p}<br><small>Feature: ${c.f}</small>`;
+      out.innerHTML = ''; btns.innerHTML = ''; delete btns.dataset.done;
+      ['Trusted', 'Untrusted'].forEach(k => {
+        const el = document.createElement('button');
+        el.className = 'choice'; el.textContent = k;
+        el.addEventListener('click', () => {
+          if (btns.dataset.done) return;
+          btns.dataset.done = '1'; done++;
+          if (k === c.a) right++;
+          Array.from(btns.children).forEach(x => {
+            x.disabled = true;
+            if (x.textContent === c.a) x.classList.add('correct');
+            else if (x.textContent === k) x.classList.add('incorrect');
+          });
+          out.innerHTML = `<div class="row"><b>${k === c.a ? 'Right' : 'Not quite: ' + c.a}</b><span>${c.w}</span></div>`;
+          scoreEl.textContent = `${right} / ${done} right`;
+        });
+        btns.appendChild(el);
+      });
+    }
+    document.getElementById('truNext').addEventListener('click', show);
+    show();
+  })();
+  const TERMS = [
+    {t:"Absolute aging", d:"Port security aging type: a secure address is deleted when the aging time runs out, whether or not the device is still sending."},
+    {t:"BPDU Guard", d:"Err-disables an access port the moment it receives a BPDU. Per port: spanning-tree bpduguard enable. On every PortFast port: spanning-tree portfast bpduguard default."},
+    {t:"DHCP snooping", d:"A switch feature that drops DHCP server messages on untrusted ports, rate-limits DHCP on them, and records each lease in a binding table."},
+    {t:"DHCP snooping binding table", d:"The switch's record of each DHCP client on an untrusted port: MAC address, leased IP address, lease time, VLAN and port. Dynamic ARP Inspection checks ARP against it."},
+    {t:"Dynamic ARP Inspection (DAI)", d:"A switch feature that checks ARP messages on untrusted ports against the DHCP snooping binding table, and drops and logs any that don't match. Requires DHCP snooping."},
+    {t:"Dynamic secure address", d:"A secure MAC address port security learns from the device plugged in. It isn't saved in the configuration, and it's forgotten after a reload or whenever the port's link goes down."},
+    {t:"Err-disabled", d:"The state a switch puts a port in after a violation, such as port security in shutdown mode or BPDU Guard: no traffic in or out, the LED off. Recover it with shutdown then no shutdown."},
+    {t:"Inactivity aging", d:"Port security aging type: a secure address is deleted only after the device has been silent for the aging time."},
+    {t:"interface range", d:"Global command that applies the following interface commands to several ports at once, such as interface range f0/2 - 10."},
+    {t:"ip arp inspection trust", d:"Interface command that exempts a port from DAI checks. Used on uplinks toward other switches and the gateway."},
+    {t:"ip arp inspection validate", d:"Global command that adds DAI checks: src-mac, dst-mac and ip. Only one line is kept, so all the checks go on the same line."},
+    {t:"ip arp inspection vlan", d:"Global command that turns DAI on for the listed VLANs."},
+    {t:"ip dhcp snooping", d:"Global command that turns DHCP snooping on. Nothing is snooped until VLANs are also listed with ip dhcp snooping vlan."},
+    {t:"ip dhcp snooping limit rate", d:"Interface command that limits how many DHCP packets per second an untrusted port may receive. Over the limit, the port is err-disabled."},
+    {t:"ip dhcp snooping trust", d:"Interface command that marks a port as trusted: DHCP server messages are allowed in. Used on uplinks toward the real DHCP server."},
+    {t:"ip dhcp snooping vlan", d:"Global command that lists the VLANs DHCP snooping protects."},
+    {t:"Port security", d:"Limits how many MAC addresses may use a switch port, and which ones. Works only on a port set to access (or trunk) by hand, not a dynamic one."},
+    {t:"PortFast", d:"Puts an access port straight into forwarding, skipping STP's listening and learning. For host ports only: on a link to another switch it can cause a loop."},
+    {t:"Protect (violation mode)", d:"Port security violation mode: frames from unknown MACs are dropped silently. No syslog message, no counter, and the port stays up. The least secure mode."},
+    {t:"Restrict (violation mode)", d:"Port security violation mode: frames from unknown MACs are dropped, a syslog message is sent and the violation counter goes up, but the port stays up."},
+    {t:"Secure MAC address", d:"A MAC address port security allows on a port: configured by hand, learned dynamically, or learned and stuck."},
+    {t:"show ip arp inspection", d:"Shows DAI's settings per VLAN and its counters of forwarded and dropped ARP packets."},
+    {t:"show ip dhcp snooping", d:"Shows whether snooping is on, the VLANs it protects, and each trusted or rate-limited interface."},
+    {t:"show ip dhcp snooping binding", d:"Lists the DHCP snooping binding table: each client's MAC, IP, lease, VLAN and port."},
+    {t:"show port-security", d:"Lists every port with port security on: its maximum, current and violation counts, and violation mode. Add interface for one port in detail, or address for the secure MAC addresses."},
+    {t:"Shutdown (violation mode)", d:"The default port security violation mode: the port is err-disabled at once, a syslog message is sent and the violation counter goes up."},
+    {t:"spanning-tree bpduguard enable", d:"Interface command that turns BPDU Guard on for one port."},
+    {t:"spanning-tree portfast", d:"Interface command that turns PortFast on for one port. spanning-tree portfast default turns it on for every access port."},
+    {t:"spanning-tree portfast bpduguard default", d:"Global command that turns BPDU Guard on for every port with PortFast."},
+    {t:"Sticky secure address", d:"A secure MAC address learned dynamically and written into the running configuration (switchport port-security mac-address sticky). Saved with the configuration, it survives a reload."},
+    {t:"switchport mode access | trunk", d:"Interface command that fixes a port as an access port or a trunk, so it doesn't negotiate with DTP. Step 1 and step 3 against VLAN hopping, and required before port security."},
+    {t:"switchport nonegotiate", d:"Interface command that stops a port sending DTP. Used on trunks made by hand."},
+    {t:"switchport port-security", d:"Interface command that turns port security on. The port must already be set with switchport mode access (or trunk)."},
+    {t:"switchport port-security aging", d:"Interface command that sets port security aging: time in minutes, and type absolute or inactivity."},
+    {t:"switchport port-security mac-address", d:"Interface command that adds a static secure MAC address, or, with sticky, makes the port keep the addresses it learns."},
+    {t:"switchport port-security maximum", d:"Interface command that sets how many secure MAC addresses a port may have. The default is 1."},
+    {t:"switchport port-security violation", d:"Interface command that sets the violation mode: shutdown (the default), restrict or protect."},
+    {t:"switchport trunk native vlan", d:"Interface command that sets a trunk's native (untagged) VLAN. Set it to an unused VLAN other than VLAN 1, such as HQ's 900."},
+    {t:"Trusted port", d:"For DHCP snooping and DAI: a port the switch doesn't check, because it leads toward devices the network team controls, such as the real DHCP server, the gateway and other switches."},
+    {t:"Untrusted port", d:"For DHCP snooping and DAI: a port the switch checks. Every port is untrusted until configured otherwise. Access ports should stay untrusted."},
+    {t:"Violation counter", d:"Port security's count of violations on a port, shown by show port-security. Shutdown and restrict modes increase it; protect doesn't."},
+  ];
+  const QUIZ = [
+    { q:"A switch rejects switchport port-security on F0/5. What's the most likely reason?",
+      choices:["The port is shut down", "The port is still in a dynamic DTP mode", "Port security is a global command", "The VLAN doesn't exist"], correct:1,
+      explain:"Port security only works on a port set to access (or trunk) by hand. Set switchport mode access first." },
+    { q:"What is the default maximum number of secure MAC addresses on a port?",
+      choices:["0", "1", "8", "Unlimited"], correct:1,
+      explain:"One. Raise it with switchport port-security maximum." },
+    { q:"Which kind of secure address is written into the running configuration?",
+      choices:["Dynamic", "Sticky", "Aged", "Restricted"], correct:1,
+      explain:"Sticky addresses are learned dynamically and added to the running configuration; save it and they survive a reload." },
+    { q:"Which violation mode drops unknown frames and sends a syslog message, but leaves the port up?",
+      choices:["Shutdown", "Restrict", "Protect", "Err-disable"], correct:1,
+      explain:"Restrict drops, logs and counts. Protect only drops. Shutdown err-disables the port." },
+    { q:"Which violation mode is the default?",
+      choices:["Protect", "Restrict", "Shutdown", "Sticky"], correct:2,
+      explain:"Shutdown: the port is err-disabled at the first violation." },
+    { q:"How do you bring an err-disabled port back after removing the cause?",
+      choices:["no switchport port-security", "shutdown, then no shutdown", "clear mac address-table", "reload the switch"], correct:1,
+      explain:"shutdown followed by no shutdown on the interface re-enables it." },
+    { q:"Which port security aging type deletes an address only after the device has been silent for the aging time?",
+      choices:["Absolute", "Inactivity", "Static", "Sticky"], correct:1,
+      explain:"Inactivity counts silence; absolute counts from when the address was learned." },
+    { q:"Which is NOT one of NetAcad's steps against VLAN hopping?",
+      choices:["switchport mode access on non-trunk ports", "switchport nonegotiate on trunks", "A native VLAN other than VLAN 1", "ip dhcp snooping trust on access ports"], correct:3,
+      explain:"DHCP snooping is about DHCP attacks, and access ports should be untrusted anyway." },
+    { q:"Which ports should be trusted for DHCP snooping?",
+      choices:["Every access port", "Ports leading toward the legitimate DHCP server", "Ports with servers on them", "No ports"], correct:1,
+      explain:"Trust the uplinks toward the real DHCP server. A server that isn't the DHCP server stays untrusted." },
+    { q:"DHCP snooping is on globally, but rogue DHCP offers still get through. What's most likely missing?",
+      choices:["ip dhcp snooping vlan", "ip dhcp snooping limit rate", "service dhcp", "ip helper-address"], correct:0,
+      explain:"Snooping only acts in the VLANs listed with ip dhcp snooping vlan." },
+    { q:"What does Dynamic ARP Inspection check ARP messages against?",
+      choices:["The MAC address table", "The DHCP snooping binding table", "The routing table", "The ARP cache of the gateway"], correct:1,
+      explain:"That's why DAI needs DHCP snooping." },
+    { q:"Why might DAI drop ARP messages from a host with a static IP address?",
+      choices:["Static hosts don't use ARP", "The host has no entry in the DHCP snooping binding table", "Static addresses are always invalid", "DAI only works on trunks"], correct:1,
+      explain:"With no DHCP lease, snooping never recorded the host's IP-to-MAC pairing, so DAI has nothing to match it against." },
+    { q:"You enter ip arp inspection validate src-mac, then ip arp inspection validate ip. Which checks are on?",
+      choices:["Both", "Only ip", "Only src-mac", "Neither"], correct:1,
+      explain:"Only one validate line is kept. Put every check on the same line." },
+    { q:"Where should PortFast be configured?",
+      choices:["On trunks between switches", "On access ports connected to end devices", "On the port-channel", "On every port"], correct:1,
+      explain:"PortFast on a link to another switch can cause a loop." },
+    { q:"What does BPDU Guard do when a BPDU arrives on a protected port?",
+      choices:["Ignores it", "Makes the port the root port", "Err-disables the port", "Forwards it to the root bridge"], correct:2,
+      explain:"A host port should never hear a BPDU, so the switch shuts it." },
+    { q:"Which global command turns on BPDU Guard for every PortFast port?",
+      choices:["spanning-tree bpduguard enable", "spanning-tree portfast bpduguard default", "spanning-tree portfast default", "bpduguard all"], correct:1,
+      explain:"spanning-tree bpduguard enable is the per-interface form." },
+  ];
+</script>
