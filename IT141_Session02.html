@@ -603,7 +603,7 @@
     </div>
     <ul class="obj-list">
       <li><strong>Tagged VLANs (10, 30, 99) keep working.</strong> Their frames carry a tag, so both ends agree.</li>
-      <li><strong>Untagged traffic crosses between VLANs.</strong> An untagged frame S1 sends in VLAN 900 arrives in VLAN 1 on S2, and the other way around. Two VLANs that should be separate are leaking into each other. The untagged native VLAN is also what the double-tagging (VLAN hopping) attack in Session 8 abuses.</li>
+      <li><strong>Untagged traffic crosses between VLANs.</strong> An untagged frame S1 sends in VLAN 900 arrives in VLAN 1 on S2, and the other way around. Two VLANs that should be separate are leaking into each other. The untagged native VLAN is also what the double-tagging attack in Session 8 abuses.</li>
       <li>CDP repeats the warning about once a minute, on both switches.</li>
       <li><strong>Fix:</strong> put <code>switchport trunk native vlan 900</code> back on S2.</li>
     </ul>

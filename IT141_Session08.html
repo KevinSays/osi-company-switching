@@ -1,0 +1,1065 @@
+<meta charset="utf-8">
+<title>IT141 Session 8 – LAN Security Concepts</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/theme.css">
+<script src="assets/site.js" defer></script>
+
+<header class="masthead">
+  <div class="wrap">
+    <p class="eyebrow">IT141 · SESSION 8 · FIELD NOTES</p>
+    <h1>LAN Security Concepts: Someone on the Inside</h1>
+    <p class="lede">Seven sessions of building, and the network works. Every port answers, every switch forwards, every host gets an address. That's the problem. A switch trusts whatever is plugged into it: it learns any MAC address, and it forwards any DHCP offer and any ARP reply to hosts that believe them. This session walks through how an attacker with one cable and one free wall jack turns that trust against the network, and names the defence for each. Session 9 builds them.</p>
+    <div class="factrow">
+      <span class="fact"><b>Exam</b> Module group 7–9</span>
+      <span class="fact"><b>New material</b> Module 10 — LAN Security Concepts</span>
+      <span class="fact"><b>Network change</b> none: today is about exposure</span>
+      <span class="fact"><b>Next session</b> Module 11 — Switch Security Configuration</span>
+    </div>
+  </div>
+</header>
+
+<nav class="index" data-pin="#flashcards #quiz" aria-label="Section index">
+  <div class="wrap">
+    <a href="index.html" class="toc-link">↩ Contents</a>
+    <a href="#overview">Overview</a>
+    <a href="#exam">Exam Review</a>
+    <a href="#endpoint">Endpoint Security</a>
+    <a href="#access">Access Control</a>
+    <a href="#l2threats">Layer 2 Threats</a>
+    <a href="#macflood">MAC Flooding</a>
+    <a href="#vlanattacks">VLAN Attacks</a>
+    <a href="#dhcpattacks">DHCP Attacks</a>
+    <a href="#arpattacks">ARP Attacks</a>
+    <a href="#spoofing">Address Spoofing</a>
+    <a href="#stpattack">STP Attacks</a>
+    <a href="#cdp">CDP Recon</a>
+    <a href="#exposure">Exposure Map</a>
+    <a href="#attackdrill">Attack Drill</a>
+    <a href="#mistakes">Common Mistakes</a>
+    <a href="#reach">What Works Now</a>
+    <a href="#ticket">The Ticket</a>
+    <a href="#checkpoint">Checkpoint</a>
+    <a href="#flashcards">Flashcards</a>
+    <a href="#quiz">Quiz</a>
+    <a href="#examples">Examples</a>
+    <a href="#glossary">Glossary</a>
+  </div>
+</nav>
+
+<main class="wrap">
+
+  <!-- OVERVIEW -->
+  <section id="overview">
+    <div class="section-head">
+      <p class="kicker">Module 10</p>
+      <h2>What Session 8 covers</h2>
+      <p>The module-group exam on Modules 7–9 comes first. Then one module, in NetAcad's order: protecting endpoints; controlling who gets onto the network and its devices (AAA and 802.1X); and the Layer 2 attacks a switch is open to, one at a time, each with the defence that stops it.</p>
+    </div>
+    <div class="cold-open">
+      <p class="tag">Cold open · Night Shift, 02:14</p>
+      <p>The NOC's night shift has a habit: once the building is quiet, the Surveyor runs a drill. Tonight she slides a printout across the desk. "Suppose S1 showed you this." It's a MAC address table, page after page of addresses nobody recognizes, every one of them on the same port: F0/5, a wall jack by the visitors' chairs that the floor plan says is empty. "Eight thousand devices on a floor with eleven desks. What happened?" The Rookie reaches for the console cable. "Shut the port?" "That's the first answer. Nothing's wrong with S1. It's a printout. But nothing on S1 would stop this either. Tonight we learn every trick someone with one free wall jack could try. Next week we lock every door."</p>
+    </div>
+    <ul class="obj-list">
+      <li>Explain how endpoint security, and devices such as next-generation firewalls and NAC, protect a network</li>
+      <li>Explain AAA (authentication, authorization and accounting), local and server-based authentication, and 802.1X</li>
+      <li>Explain why Layer 2 is the weak link, and match each category of switch attack to its mitigation</li>
+      <li>Explain MAC address table flooding</li>
+      <li>Explain VLAN hopping and double-tagging, DHCP starvation and spoofing, ARP spoofing and poisoning, address spoofing, STP manipulation and CDP reconnaissance</li>
+    </ul>
+    <div class="teach-note">
+      <span class="label">Topology used on this page</span>
+      The network exactly as Session 7 left it; nothing changes today. Some of the output on this page is <strong>illustrative</strong>: it shows what an attack would look like on HQ's switches, and it's labelled. Packet Tracer doesn't run these attacks, and nobody runs them on a network they don't own.
+    </div>
+  </section>
+
+  <!-- EXAM REVIEW -->
+  <section id="exam">
+    <div class="section-head">
+      <p class="kicker">Module group exam</p>
+      <h2>Modules 7–9: cross-module review</h2>
+      <p>The exam covers DHCPv4, SLAAC and DHCPv6, and FHRP. If you can answer these cold, Sessions 6 and 7 have landed.</p>
+    </div>
+    <ul class="obj-list">
+      <li><strong>DHCPv4 server:</strong> exclusions first, then a pool per subnet with <code>network</code>, <code>default-router</code> (the client's gateway, not the server) and <code>dns-server</code>. A 169.254 address means no offer came back (Session 6).</li>
+      <li><strong>Relay:</strong> <code>ip helper-address</code> on the interface where the clients' broadcasts arrive; the server picks the pool from the giaddr and needs a route back to it (Session 6).</li>
+      <li><strong>RA flags:</strong> A=1 SLAAC; O=1 other settings from a stateless DHCPv6 server; M=1 address from a stateful one, with <code>no-autoconfig</code> for A=0. The IPv6 gateway always comes from the RA (Session 7).</li>
+      <li><strong>DHCPv6:</strong> stateful is SOLICIT, ADVERTISE, REQUEST, REPLY; stateless needs only INFORMATION-REQUEST and REPLY. Clients send to UDP 547, servers to 546. A stateless server keeps no bindings (Session 7).</li>
+      <li><strong>HSRP:</strong> a virtual IP and MAC shared by an active and a standby router. Highest priority wins (default 100), then the highest IP; <code>standby preempt</code> lets a higher-priority router take the role back. Hello 3 s, hold 10 s (Session 7).</li>
+    </ul>
+    <div class="teach-note">
+      <span class="label">Where to actually study</span>
+      The checkpoints, flashcards and quizzes for <a href="IT141_Session06.html#checkpoint">Session 6</a> and <a href="IT141_Session07.html#checkpoint">Session 7</a>, plus the <a href="IT141_Session07.html#methoddrill">Which method?</a> drill.
+    </div>
+  </section>
+
+  <!-- ENDPOINT -->
+  <section id="endpoint">
+    <div class="section-head">
+      <p class="kicker">Module 10.1</p>
+      <h2>Endpoint security</h2>
+      <p>Most attacks that make the news fall into a few kinds, and most of them reach the network through an <strong>endpoint</strong>: a laptop, desktop, server or IP phone, including the ones employees bring from home.</p>
+    </div>
+    <table class="spec">
+      <thead><tr><th>Attack</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td><strong>DDoS</strong> (distributed denial of service)</td><td>Many compromised devices, called <strong>zombies</strong>, flood a target at once, to slow or stop public access to it</td></tr>
+        <tr><td><strong>Data breach</strong></td><td>Servers or hosts are broken into to steal confidential information</td></tr>
+        <tr><td><strong>Malware</strong></td><td>Malicious software infects hosts. Ransomware, such as WannaCry, encrypts a host's data and demands payment to unlock it.</td></tr>
+      </tbody>
+    </table>
+    <h3 class="sub">Devices at the edge</h3>
+    <table class="spec">
+      <thead><tr><th>Device</th><th>Job</th></tr></thead>
+      <tbody>
+        <tr><td><strong>VPN-enabled router</strong></td><td>A secure connection for remote users across a public network. VPN can also be built into the firewall.</td></tr>
+        <tr><td><strong>NGFW</strong> (next-generation firewall)</td><td>Stateful inspection plus application control, a next-generation IPS (<strong>NGIPS</strong>), advanced malware protection (<strong>AMP</strong>) and URL filtering</td></tr>
+        <tr><td><strong>NAC</strong> (network access control)</td><td>AAA services and access policies for every kind of user and device. Cisco's <strong>ISE</strong> (Identity Services Engine) is one.</td></tr>
+      </tbody>
+    </table>
+    <h3 class="sub">Protecting the endpoints themselves</h3>
+    <p>Endpoints traditionally run their own protection: antivirus and antimalware, a host-based firewall, and a <strong>HIPS</strong> (host-based intrusion prevention system). Today they're best protected by a combination: NAC, AMP software on each host, and two appliances that watch the two ways most malware arrives.</p>
+    <table class="spec">
+      <thead><tr><th>Appliance</th><th>Watches</th><th>Does</th></tr></thead>
+      <tbody>
+        <tr><td><strong>ESA</strong> (Email Security Appliance)</td><td>Email (SMTP)</td><td>Blocks known threats, discards email with bad links, catches malware that slipped through, encrypts outgoing mail. It pulls fresh threat data from Cisco Talos every few minutes.</td></tr>
+        <tr><td><strong>WSA</strong> (Web Security Appliance)</td><td>Web traffic</td><td>URL filtering and blocklists, malware scanning, application control (allow, limit or block chat, video and so on), and decrypting web traffic to inspect it</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ACCESS CONTROL -->
+  <section id="access">
+    <div class="section-head">
+      <p class="kicker">Module 10.2</p>
+      <h2>Access control: AAA and 802.1X</h2>
+      <p>Two questions: who may log in to a <em>network device</em>, and who may plug a device into the <em>network</em>?</p>
+    </div>
+    <div class="teach-note callback">
+      <span class="label">CCNA 1 callback</span>
+      In <a href="https://kevinsays.github.io/131/">CCNA 1</a>, AAA was a concept, with configuring it against a RADIUS or TACACS+ server left for later courses. In this course it stays a concept, but now you can see where the SSH login you've used since Session 1 fits into it.
+    </div>
+    <h3 class="sub">Logging in to a device</h3>
+    <p>The simplest method is a password on the console and vty lines. SSH is better: it needs a username <em>and</em> a password, and the session is encrypted. HQ's switches and R1 check those against a <strong>local</strong> database of usernames on each device:</p>
+        <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · the local user database SSH has used since Session 1</span></div>
+      <div class="terminal-body"><span class="prompt">S1#</span> <span class="cmd">show running-config | include username</span>
+<span class="hl">username admin secret 5 $1$mERr$hx5rVt7rPNoS4wqbXKX7m0</span>
+<span class="prompt">S1#</span> <span class="cmd">show running-config | section line</span>
+<span class="out">line con 0</span>
+<span class="out"> password 7 0822455D0A16544541</span>
+<span class="hl"> login</span>
+<span class="out">line vty 0 4</span>
+<span class="hl"> login local</span>
+<span class="out"> transport input ssh</span>
+<span class="out">line vty 5 15</span>
+<span class="out"> login local</span>
+<span class="out"> transport input ssh</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong>Two kinds of login side by side.</strong> The console&#x27;s <code>login</code> checks the line&#x27;s own password: no username, and anyone who knows it gets in. The vty lines&#x27; <code>login local</code> checks the <strong>local user database</strong>: a username <em>and</em> a secret. SSH needs that, because an SSH login always has a username.</li>
+      <li><strong>The limits of local authentication:</strong> the account exists separately on every device, so a password change means touching every box; and plain <code>login local</code> has no fallback, no second method to try.</li>
+      <li>The secret is stored as a hash (<code>5</code> is an MD5-based type), so the password itself never appears. The hash here is made up.</li>
+    </ul>
+
+    <h3 class="sub">AAA</h3>
+    <p><strong>AAA</strong> is the framework for controlling access to a device or a network:</p>
+    <table class="spec">
+      <thead><tr><th>A</th><th>Question</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Authentication</strong></td><td>Who are you?</td><td>Checks a username and password (or certificate) before letting anyone in</td></tr>
+        <tr><td><strong>Authorization</strong></td><td>What may you do?</td><td>Decides, automatically after login, which commands or services the user is allowed</td></tr>
+        <tr><td><strong>Accounting</strong></td><td>What did you do?</td><td>Logs usage: start and stop times, commands typed, bytes sent. Used for auditing, billing and troubleshooting, and as evidence.</td></tr>
+      </tbody>
+    </table>
+    <table class="spec">
+      <thead><tr><th></th><th>Local AAA</th><th>Server-based AAA</th></tr></thead>
+      <tbody>
+        <tr><td>Where the accounts live</td><td>On each router and switch</td><td>On one central AAA server</td></tr>
+        <tr><td>How the device asks</td><td>It checks its own list</td><td><strong>RADIUS</strong> or <strong>TACACS+</strong></td></tr>
+        <tr><td>Suits</td><td>A small network</td><td>Many routers and switches: one place to add, change or remove a user</td></tr>
+      </tbody>
+    </table>
+    <h3 class="sub">802.1X: who may plug in</h3>
+    <p><strong>IEEE 802.1X</strong> is port-based access control. A switch port (or a wireless access point) lets only authentication messages through (plus a few control protocols such as CDP and STP) until the device on it has proved who it is. Three roles:</p>
+    <table class="spec">
+      <thead><tr><th>Role</th><th>Who</th><th>Job</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Supplicant</strong> (client)</td><td>The PC or phone, running 802.1X client software</td><td>Proves its identity</td></tr>
+        <tr><td><strong>Authenticator</strong></td><td>The switch, or a wireless access point</td><td>The go-between: passes the client's credentials to the server, and opens the port only if the server says yes</td></tr>
+        <tr><td><strong>Authentication server</strong></td><td>Usually a RADIUS server</td><td>Decides whether the client is allowed on</td></tr>
+      </tbody>
+    </table>
+    <p>Had F0/5 in the Surveyor's printout run 802.1X, a stranger's laptop would have got nothing through it except the login exchange.</p>
+  </section>
+
+  <!-- L2 THREATS -->
+  <section id="l2threats">
+    <div class="section-head">
+      <p class="kicker">Module 10.3</p>
+      <h2>Layer 2: the weak link</h2>
+      <p>Firewalls, VPNs and intrusion prevention guard Layer 3 and up. But every layer sits on Layer 2: an attacker who can read or redirect frames on the LAN makes the security above it useless. And LANs were built on trust, back when everyone plugged into them worked for the company.</p>
+    </div>
+    <table class="spec">
+      <thead><tr><th>Category</th><th>Attacks</th><th>Mitigation</th><th>Configured in</th></tr></thead>
+      <tbody>
+        <tr><td><strong>MAC table</strong></td><td>MAC address flooding</td><td>Port security</td><td>Session 9</td></tr>
+        <tr><td><strong>VLAN</strong></td><td>VLAN hopping, double-tagging</td><td>Trunk guidelines: access ports never trunk, no DTP, an unused native VLAN</td><td>Session 2, already</td></tr>
+        <tr><td><strong>DHCP</strong></td><td>DHCP starvation, DHCP spoofing</td><td>DHCP snooping (and port security for starvation)</td><td>Session 9</td></tr>
+        <tr><td><strong>ARP</strong></td><td>ARP spoofing, ARP poisoning</td><td>Dynamic ARP Inspection (DAI)</td><td>Session 9</td></tr>
+        <tr><td><strong>Address spoofing</strong></td><td>MAC and IP address spoofing</td><td>IP Source Guard (IPSG)</td><td>Named only</td></tr>
+        <tr><td><strong>STP</strong></td><td>STP manipulation</td><td>BPDU Guard on access ports</td><td>Session 9</td></tr>
+        <tr><td><strong>Reconnaissance</strong></td><td>CDP (and LLDP) reconnaissance</td><td>CDP off on edge ports (LLDP is already off by default)</td><td>Session 9</td></tr>
+      </tbody>
+    </table>
+    <p>None of that works if the switches themselves are easy to take over. Protect management too:</p>
+    <ul class="obj-list">
+      <li><strong>Secure management protocols:</strong> SSH, SCP, SFTP and TLS, never Telnet, TFTP, FTP or HTTP.</li>
+      <li><strong>Out-of-band management:</strong> a separate network just for managing devices.</li>
+      <li><strong>A dedicated management VLAN</strong> with nothing else in it. HQ has had one since Session 2: VLAN 99.</li>
+      <li><strong>ACLs</strong> to filter who can reach the devices at all (CCNA 3 material).</li>
+    </ul>
+  </section>
+
+  <!-- MAC FLOOD -->
+  <section id="macflood">
+    <div class="section-head">
+      <p class="kicker">Module 10.4</p>
+      <h2>MAC address table flooding</h2>
+      <p>A switch learns each frame's source MAC and the port it came in on. That table lives in memory, and it has a fixed size.</p>
+    </div>
+        <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · the MAC table on a normal day</span></div>
+      <div class="terminal-body"><span class="prompt">S1#</span> <span class="cmd">show mac address-table dynamic</span>
+<span class="out">          Mac Address Table</span>
+<span class="out">-------------------------------------------</span>
+
+<span class="out">Vlan    Mac Address       Type        Ports</span>
+<span class="out">----    -----------       --------    -----</span>
+<span class="out">  10    0060.5c3b.a801    DYNAMIC     Fa0/1</span>
+<span class="out">  10    00d0.97cc.00c1    DYNAMIC     Po2</span>
+<span class="out">  10    00e0.f70c.0011    DYNAMIC     Po2</span>
+<span class="out">  30    0090.2b5d.0030    DYNAMIC     Po2</span>
+<span class="out">  30    00d0.97cc.00c1    DYNAMIC     Po2</span>
+<span class="out">  99    0002.16aa.0012    DYNAMIC     Po2</span>
+<span class="out">  99    00d0.97cc.00c1    DYNAMIC     Po2</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong>A handful of entries:</strong> three PCs, D1&#x27;s SVIs and S2&#x27;s management SVI. The MAC addresses on this page are made up.</li>
+      <li><strong>PC-C, PC-D and S2 are learned on Po2, not Po1.</strong> S2&#x27;s end of Po1 is blocking (Sessions 4–5), so frames from S2&#x27;s side reach S1 through D1. The MAC table shows the STP path.</li>
+      <li><strong>D1 appears once per VLAN:</strong> one MAC for all its SVIs, but the table is keyed by VLAN plus MAC.</li>
+      <li><strong>Capacity:</strong> a 2960&#x27;s table holds about 8,000 addresses. NetAcad&#x27;s example, a Catalyst 6500, holds 132,000. Either way, it fills in seconds against a tool sending thousands of frames a second. Entries age out after 300 seconds of silence.</li>
+    </ul>
+
+    <p>A <strong>MAC address flooding</strong> attack fills the table on purpose. A tool such as <strong>macof</strong> sends thousands of frames a second, each from a made-up source MAC. The table fills in seconds. Once it's full, the switch can't learn any new address, so frames for a host it doesn't know become unknown unicasts, and the switch <strong>floods</strong> them out every port in the VLAN, including the attacker's. For those frames, the switch has turned into a hub.</p>
+        <div class="teach-note warn">
+      <span class="label">Illustration</span>
+      Illustration: what an attack would look like. Packet Tracer doesn&#x27;t run it.
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · during a MAC flooding attack from F0/5</span></div>
+      <div class="terminal-body"><span class="prompt">S1#</span> <span class="cmd">show mac address-table count</span>
+
+<span class="out">Mac Entries for Vlan 10:</span>
+<span class="out">---------------------------</span>
+<span class="hl">Dynamic Address Count  : ...</span>
+<span class="out">Static  Address Count  : 0</span>
+<span class="out">Total Mac Addresses    : ...</span>
+<span class="out">...</span>
+<span class="hl">Total Mac Address Space Available: 0</span>
+
+<span class="prompt">S1#</span> <span class="cmd">show mac address-table dynamic vlan 10</span>
+<span class="out">          Mac Address Table</span>
+<span class="out">-------------------------------------------</span>
+
+<span class="out">Vlan    Mac Address       Type        Ports</span>
+<span class="out">----    -----------       --------    -----</span>
+<span class="out">  10    0060.5c3b.a801    DYNAMIC     Fa0/1</span>
+<span class="hl">  10    0a3f.1c77.e201    DYNAMIC     Fa0/5</span>
+<span class="hl">  10    2e91.04b8.5d3c    DYNAMIC     Fa0/5</span>
+<span class="hl">  10    4a1c.9e02.77d3    DYNAMIC     Fa0/5</span>
+<span class="hl">  10    6c08.f3a1.0b9e    DYNAMIC     Fa0/5</span>
+<span class="hl">  10    8e55.2d19.c460    DYNAMIC     Fa0/5</span>
+<span class="out">...</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong>The tell:</strong> thousands of addresses on one access port, none of them real devices, and no space left. F0/5 is an unused port, but it&#x27;s live in VLAN 10.</li>
+      <li><strong>A full table doesn&#x27;t throw out what it already knows.</strong> PC-A is still listed, and frames to it are still forwarded normally. But a quiet host&#x27;s entry ages out after 300 seconds and can&#x27;t be learned again while the table is full; from then on, its frames flood. Attack tools keep sending for exactly that reason.</li>
+      <li><strong>The flood stays inside each VLAN.</strong> The full table stops S1 learning in every VLAN, but the attacker in VLAN 10 only sees VLAN 10&#x27;s floods.</li>
+      <li><strong>The neighbours fill up too.</strong> The bogus frames themselves go to unknown destinations, so S1 floods them up its trunks, and D1 and S2 learn the bogus addresses as well. One port, three full tables.</li>
+      <li>NetAcad also calls this a <strong>MAC address table overflow</strong> attack. The mitigation is <strong>port security</strong>: a limit on how many MAC addresses a port may learn. Session 9.</li>
+    </ul>
+
+  </section>
+
+  <!-- VLAN ATTACKS -->
+  <section id="vlanattacks">
+    <div class="section-head">
+      <p class="kicker">Module 10.5</p>
+      <h2>VLAN attacks</h2>
+      <p>Both VLAN attacks aim to get frames into a VLAN the attacker isn't in, without going through a router.</p>
+    </div>
+    <h3 class="sub">VLAN hopping</h3>
+    <p>The attacker's host pretends to be a switch. It speaks DTP to the switch port, and if the port is willing, the two form a <strong>trunk</strong>. Now the attacker sends and receives on every VLAN the trunk carries.</p>
+    <div class="teach-note callback">
+      <span class="label">Session 2 callback</span>
+      This is "Will it trunk?" with a laptop on one end. A port left in <code>dynamic auto</code> trunks with anything that asks in <code>desirable</code> mode.
+    </div>
+        <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S2 · PC-D&#x27;s port: a static access port that won&#x27;t negotiate</span></div>
+      <div class="terminal-body"><span class="prompt">S2#</span> <span class="cmd">show interfaces f0/11 switchport</span>
+<span class="out">Name: Fa0/11</span>
+<span class="out">Switchport: Enabled</span>
+<span class="hl">Administrative Mode: static access</span>
+<span class="out">Operational Mode: static access</span>
+<span class="out">Administrative Trunking Encapsulation: dot1q</span>
+<span class="out">Operational Trunking Encapsulation: native</span>
+<span class="hl">Negotiation of Trunking: Off</span>
+<span class="out">Access Mode VLAN: 30 (LOGISTICS)</span>
+<span class="out">Trunking Native Mode VLAN: 1 (default)</span>
+<span class="out">Voice VLAN: none</span>
+<span class="out">...</span></div>
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · Po1: a trunk built by hand</span></div>
+      <div class="terminal-body"><span class="prompt">S1#</span> <span class="cmd">show interfaces po1 switchport</span>
+<span class="out">Name: Po1</span>
+<span class="out">Switchport: Enabled</span>
+<span class="hl">Administrative Mode: trunk</span>
+<span class="out">Operational Mode: trunk</span>
+<span class="out">Administrative Trunking Encapsulation: dot1q</span>
+<span class="out">Operational Trunking Encapsulation: dot1q</span>
+<span class="hl">Negotiation of Trunking: Off</span>
+<span class="out">Access Mode VLAN: 1 (default)</span>
+<span class="hl">Trunking Native Mode VLAN: 900 (NATIVE)</span>
+<span class="out">...</span>
+<span class="out">Trunking VLANs Enabled: 10,30,99,900</span>
+<span class="out">...</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong>PC-D&#x27;s port is <code>static access</code></strong>, with negotiation off. A device on F0/11 can send all the DTP it likes; the port stays an access port in VLAN 30.</li>
+      <li><strong>Po1 is a trunk because it was told to be one</strong>, and it sends no DTP (<code>nonegotiate</code>). Po2 and Po3 are the same.</li>
+      <li><code>Access Mode VLAN: 1</code> on a trunk is normal: that setting is only used if the port were an access port.</li>
+    </ul>
+    <p>Compare a desk port on a 2960 nobody has configured, after a laptop plugged into it sends DTP in <code>desirable</code> mode:</p>
+    <div class="teach-note warn">
+      <span class="label">Illustration</span>
+      Illustration: what an attack would look like. Packet Tracer doesn&#x27;t run it. This is a factory-default switch, not one of HQ&#x27;s (look at the prompt).
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">A factory-default 2960 · F0/5 after the laptop asked for a trunk</span></div>
+      <div class="terminal-body"><span class="prompt">Switch#</span> <span class="cmd">show interfaces f0/5 switchport</span>
+<span class="out">Name: Fa0/5</span>
+<span class="out">Switchport: Enabled</span>
+<span class="out">Administrative Mode: dynamic auto</span>
+<span class="hl">Operational Mode: trunk</span>
+<span class="out">Administrative Trunking Encapsulation: dot1q</span>
+<span class="out">Operational Trunking Encapsulation: dot1q</span>
+<span class="out">Negotiation of Trunking: On</span>
+<span class="out">Access Mode VLAN: 1 (default)</span>
+<span class="out">Trunking Native Mode VLAN: 1 (default)</span>
+<span class="out">...</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong>The tell is The Native&#x27;s tell from Session 2:</strong> administrative <code>dynamic auto</code>, operational <code>trunk</code>, on a port nobody configured as a trunk.</li>
+      <li><strong>What the laptop now has:</strong> a trunk carrying every VLAN on the switch. It can tag frames into any of them, with no router involved.</li>
+      <li>On a 2960, a port nobody has configured is in <code>dynamic auto</code>, so it trunks if the far end asks. Other Cisco switches have different defaults, so check before trusting one.</li>
+      <li><strong>Why it can&#x27;t happen at HQ:</strong> every port on S1, S2 and D1 is a static access port, a static trunk with <code>nonegotiate</code>, a routed port (D1&#x27;s link to R1), or parked. None is dynamic.</li>
+    </ul>
+
+    <h3 class="sub">Double-tagging</h3>
+        <p>The second VLAN attack needs a stranger set-up, so here it is on paper, on a version of HQ that doesn&#x27;t exist: suppose one of S1&#x27;s access ports were in VLAN 900, the native VLAN.</p>
+    <figure class="diagram">
+      <svg viewBox="0 0 360 276" style="max-width:460px" role="img" aria-label="VLAN double-tagging on a hypothetical HQ: the intruder on an S1 port in native VLAN 900 sends a frame tagged 900 then 30. S1 strips the 900 tag and sends it untagged across Po2, because 900 is the native VLAN. D1 reads the remaining tag 30 and forwards the frame through Po3 and S2 to PC-D in VLAN 30. PC-D's reply can't return to VLAN 900.">
+        <defs><marker id="dtR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#A23A2E"/></marker></defs>
+        <g font-family="IBM Plex Mono" font-size="12" fill="currentColor">
+          <rect x="10" y="8" width="118" height="40" fill="#A23A2E" fill-opacity=".12" stroke="#A23A2E" stroke-width="1.5"/><text x="69" y="24" text-anchor="middle" font-weight="600" fill="#A23A2E">Intruder</text><text x="69" y="39" text-anchor="middle" font-size="10" fill="#A23A2E">S1 port, VLAN 900?</text>
+          <rect x="160" y="10" width="38" height="18" fill="#A23A2E" fill-opacity=".25" stroke="#A23A2E"/><text x="179" y="23" text-anchor="middle" font-size="10" font-weight="600">900</text>
+          <rect x="198" y="10" width="30" height="18" fill="#2F4858" fill-opacity=".25" stroke="#2F4858"/><text x="213" y="23" text-anchor="middle" font-size="10" font-weight="600">30</text>
+          <rect x="228" y="10" width="48" height="18" fill="none" stroke="currentColor"/><text x="252" y="23" text-anchor="middle" font-size="10">data</text>
+          <text x="219" y="44" text-anchor="middle" font-size="10.5">1 · two tags; outer = native</text>
+          <line x1="69" y1="48" x2="69" y2="74" stroke="#A23A2E" stroke-width="1.8" marker-end="url(#dtR)"/>
+          <rect x="10" y="76" width="118" height="40" fill="none" stroke="currentColor" stroke-width="1.5"/><text x="69" y="93" text-anchor="middle" font-weight="600">S1</text><text x="69" y="108" text-anchor="middle" font-size="10">strips 900</text>
+          <text x="219" y="92" text-anchor="middle" font-size="10.5">2 · reads only the outer tag;</text><text x="219" y="106" text-anchor="middle" font-size="10.5">native frames cross untagged</text>
+          <line x1="69" y1="116" x2="69" y2="150" stroke="#A23A2E" stroke-width="1.8" marker-end="url(#dtR)"/><text x="80" y="137" font-size="10">Po2</text>
+          <rect x="160" y="126" width="30" height="18" fill="#2F4858" fill-opacity=".25" stroke="#2F4858"/><text x="175" y="139" text-anchor="middle" font-size="10" font-weight="600">30</text>
+          <rect x="190" y="126" width="48" height="18" fill="none" stroke="currentColor"/><text x="214" y="139" text-anchor="middle" font-size="10">data</text>
+          <rect x="10" y="152" width="118" height="40" fill="none" stroke="currentColor" stroke-width="1.5"/><text x="69" y="169" text-anchor="middle" font-weight="600">D1</text><text x="69" y="184" text-anchor="middle" font-size="10">sees tag 30</text>
+          <text x="219" y="168" text-anchor="middle" font-size="10.5">3 · an ordinary VLAN 30 frame,</text><text x="219" y="182" text-anchor="middle" font-size="10.5">forwarded via Po3 and S2</text>
+          <line x1="69" y1="192" x2="69" y2="226" stroke="#A23A2E" stroke-width="1.8" marker-end="url(#dtR)"/><text x="80" y="213" font-size="10">Po3, S2</text>
+          <rect x="10" y="228" width="118" height="40" fill="#2F4858" fill-opacity=".12" stroke="#2F4858" stroke-width="1.5"/><text x="69" y="245" text-anchor="middle" font-weight="600" fill="#2F4858">PC-D</text><text x="69" y="260" text-anchor="middle" font-size="10" fill="#2F4858">VLAN 30</text>
+          <text x="219" y="244" text-anchor="middle" font-size="10.5">4 · the reply has no way</text><text x="219" y="258" text-anchor="middle" font-size="10.5">back to VLAN 900: one-way</text>
+        </g>
+      </svg>
+      <figcaption>Figure 1. Double-tagging on a hypothetical HQ. It only works because the outer tag matches the trunk&#x27;s native VLAN, so S1 strips it and sends the frame untagged. The next switch reads the hidden inner tag and delivers the frame into VLAN 30.</figcaption>
+    </figure>
+    <ul class="obj-list">
+      <li><strong>It&#x27;s one-way.</strong> PC-D&#x27;s reply goes to the intruder&#x27;s MAC in VLAN 30, and the intruder is in VLAN 900. Nothing retags it, and VLAN 900 has no gateway. The intruder can send frames in, but gets nothing back.</li>
+      <li><strong>It can&#x27;t happen at HQ,</strong> because step 1 needs an access port in VLAN 900, and VLAN 900 has none. That&#x27;s Session 2&#x27;s design paying off: the native VLAN is used only on trunks.</li>
+      <li>For the curious (beyond this course): real switches can also tag the native VLAN (<code>vlan dot1q tag native</code>), so step 2 never strips anything.</li>
+    </ul>
+
+    <p>NetAcad's three guidelines stop both VLAN attacks, and HQ has followed all three since Session 2:</p>
+    <ul class="obj-list">
+      <li><strong>Turn trunking off on every access port:</strong> <code>switchport mode access</code>.</li>
+      <li><strong>Turn auto-trunking off on trunk links,</strong> so trunks are only ever made on purpose: <code>switchport mode trunk</code> with <code>switchport nonegotiate</code>.</li>
+      <li><strong>Use the native VLAN only on trunks:</strong> VLAN 900 has no access ports and no hosts.</li>
+    </ul>
+  </section>
+
+  <!-- DHCP ATTACKS -->
+  <section id="dhcpattacks">
+    <div class="section-head">
+      <p class="kicker">Module 10.5</p>
+      <h2>DHCP attacks</h2>
+      <p>DHCP hands out the most important settings a host has (its address, gateway and DNS server) to anyone who asks, from anyone who answers. Both attacks are stopped by DHCP snooping.</p>
+    </div>
+    <table class="spec">
+      <thead><tr><th>Attack</th><th>How</th><th>The damage</th></tr></thead>
+      <tbody>
+        <tr><td><strong>DHCP starvation</strong></td><td>A tool such as <strong>Gobbler</strong> sends DHCPDISCOVERs from thousands of made-up MAC addresses until every address in the pool is leased</td><td>Denial of service: real clients get no address. It's often the first step of a spoofing attack.</td></tr>
+        <tr><td><strong>DHCP spoofing</strong></td><td>A <strong>rogue DHCP server</strong> on the LAN answers clients before, or instead of, the real one</td><td>Whatever it hands out: a wrong <strong>gateway</strong> (the attacker's own host, a man-in-the-middle), a wrong <strong>DNS server</strong> (fake websites), or a wrong <strong>address</strong> (denial of service)</td></tr>
+      </tbody>
+    </table>
+    <div class="teach-note callback">
+      <span class="label">Session 6 callback</span>
+      Session 6 warned that the home router on S3 F0/3, plugged in by a LAN port instead of its internet port, would start answering the Shipping LAN's DHCP requests. That's DHCP spoofing, with no attacker at all: a rogue server can be an accident.
+    </div>
+        <div class="teach-note warn">
+      <span class="label">Illustration</span>
+      If the home router on S3 F0/3 were plugged in by a LAN port. A Packet Tracer copy of the network could show this one; the course network never did it.
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">PC-B · a lease from the home router&#x27;s LAN side</span></div>
+      <div class="terminal-body"><span class="prompt">C:\&gt;</span> <span class="cmd">ipconfig /all</span>
+
+<span class="out">FastEthernet0 Connection:(default port)</span>
+
+<span class="out">   Connection-specific DNS Suffix..: ...</span>
+<span class="out">   Physical Address................: 0060.70AA.0020</span>
+<span class="out">   Link-local IPv6 Address.........: FE80::260:70FF:FEAA:20</span>
+<span class="out">   IPv6 Address....................: 2001:DB8:ACAD:20:260:70FF:FEAA:20</span>
+<span class="hl">   IPv4 Address....................: 192.168.0.100</span>
+<span class="out">   Subnet Mask.....................: 255.255.255.0</span>
+<span class="out">   Default Gateway.................: FE80::2</span>
+<span class="hl">                                     192.168.0.1</span>
+<span class="hl">   DHCP Servers....................: 192.168.0.1</span>
+<span class="out">   DHCPv6 IAID.....................:</span>
+<span class="out">   DHCPv6 Client DUID..............: ...</span>
+<span class="out">   DNS Servers.....................: 2001:DB8:ACAD:20::100</span>
+<span class="out">                                     ...</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong>The tell:</strong> an address from a subnet that isn&#x27;t Shipping&#x27;s (192.168.0.x, not 192.168.20.x), and a DHCP server that isn&#x27;t R2&#x27;s <code>192.168.20.1</code>.</li>
+      <li><strong>Every IPv6 line is unchanged.</strong> The home router is an IPv4 DHCP server; PC-B&#x27;s SLAAC address, gateway and IPv6 DNS server still come from R2. (A rogue IPv6 source would be a stray router sending RAs: Session 7&#x27;s warning.)</li>
+      <li><strong>The damage:</strong> PC-B&#x27;s gateway is now the home router&#x27;s LAN side, which can&#x27;t reach SRV1 or HQ. That&#x27;s NetAcad&#x27;s "wrong default gateway". A malicious server would hand out its <em>own</em> address as the gateway and forward everything: a man-in-the-middle.</li>
+      <li><strong>When the rogue wins:</strong> a client with a lease renews by unicast with its own server, so it keeps the good lease. The rogue only competes when a client sends a fresh DISCOVER (a new PC, a reboot, a release and renew), and the client takes the first offer that arrives. A server on the same switch usually answers first.</li>
+      <li><strong>Starvation leaves its tell on the server:</strong> R2&#x27;s <code>show ip dhcp binding</code> full of hardware addresses that match no real PC, and new clients falling back to 169.254.</li>
+    </ul>
+
+  </section>
+
+  <!-- ARP ATTACKS -->
+  <section id="arpattacks">
+    <div class="section-head">
+      <p class="kicker">Module 10.5</p>
+      <h2>ARP spoofing and poisoning</h2>
+      <p>ARP has no way to check who's telling the truth. A host broadcasts "who has 192.168.10.1?" and believes whatever reply comes back. It even accepts replies nobody asked for.</p>
+    </div>
+    <p>A reply nobody asked for is a <strong>gratuitous ARP</strong>. It has honest uses: in Session 3 a new SVI announced itself with one, and in Session 7's HSRP what-if, a new active router did the same. An attacker uses the same message to lie. It sends gratuitous ARPs saying "192.168.10.1 is at <em>my</em> MAC" (<strong>ARP spoofing</strong>), and the hosts' ARP caches are now <strong>poisoned</strong>. Every frame they send to their gateway goes to the attacker, who copies it and passes it on: a man-in-the-middle.</p>
+        <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">PC-C · the gateway&#x27;s real MAC</span></div>
+      <div class="terminal-body"><span class="prompt">C:\&gt;</span> <span class="cmd">arp -a</span>
+<span class="out">  Internet Address      Physical Address      Type</span>
+<span class="hl">  192.168.10.1          00d0.97cc.00c1        dynamic</span></div>
+    </div>
+    <div class="teach-note warn">
+      <span class="label">Illustration</span>
+      Illustration: what an attack would look like. Packet Tracer doesn&#x27;t run it.
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">PC-C · after ARP poisoning from S1 F0/5</span></div>
+      <div class="terminal-body"><span class="prompt">C:\&gt;</span> <span class="cmd">arp -a</span>
+<span class="out">  Internet Address      Physical Address      Type</span>
+<span class="hl">  192.168.10.1          0040.0bad.0005        dynamic</span>
+<span class="hl">  192.168.10.102        0040.0bad.0005        dynamic</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><code>192.168.10.1</code> is D1&#x27;s Vlan10 SVI. (Session 7&#x27;s virtual MAC belonged to the HSRP what-if; HQ doesn&#x27;t run HSRP.)</li>
+      <li><strong>After the attack, the gateway&#x27;s IP maps to the intruder&#x27;s MAC.</strong> PC-C still sends to <code>192.168.10.1</code>, but every frame goes to the laptop on S1 F0/5, which reads it and passes it on to D1. PC-C notices nothing.</li>
+      <li><strong>A common tell: two IP addresses with one MAC</strong>, the gateway and the intruder&#x27;s own address. The second line only shows up if PC-C has talked to the intruder.</li>
+      <li><strong>Both directions:</strong> a real man-in-the-middle also poisons D1, so the replies come through the laptop too.</li>
+      <li><strong>The switch isn&#x27;t fooled, and doesn&#x27;t need to be.</strong> S1 learns the intruder&#x27;s MAC on F0/5, where it really is. The MAC table is right; the hosts&#x27; ARP caches are wrong. That&#x27;s what separates ARP poisoning from MAC address spoofing.</li>
+    </ul>
+
+    <p>IPv6 replaces ARP with ICMPv6 Neighbor Discovery, which can be forged the same way; switches have separate features to protect it, beyond this course. On IPv4, the mitigation is <strong>Dynamic ARP Inspection</strong> (DAI), which Session 9 configures.</p>
+  </section>
+
+  <!-- ADDRESS SPOOFING -->
+  <section id="spoofing">
+    <div class="section-head">
+      <p class="kicker">Module 10.5</p>
+      <h2>Address spoofing</h2>
+      <p>Using someone else's address.</p>
+    </div>
+    <ul class="obj-list">
+      <li><strong>IP address spoofing:</strong> the attacker takes another host's IP address, or a random one. Hard to catch inside the subnet the address belongs to.</li>
+      <li><strong>MAC address spoofing:</strong> the attacker sets its MAC to the victim's. The switch moves the victim's MAC table entry to the attacker's port, and sends the victim's frames there. When the victim sends again, the switch moves the entry back, so the attacker keeps sending frames to hold it.</li>
+      <li>A switch has no way to check which port a MAC address really belongs on. <strong>IP Source Guard</strong> (IPSG) is the mitigation for both. NetAcad names it; this course doesn't configure it.</li>
+    </ul>
+  </section>
+
+  <!-- STP ATTACK -->
+  <section id="stpattack">
+    <div class="section-head">
+      <p class="kicker">Module 10.5</p>
+      <h2>STP manipulation</h2>
+      <p>Spanning Tree elects the root bridge from whatever BPDUs it hears. It doesn't ask who sent them.</p>
+    </div>
+    <p>An attacker's host sends BPDUs announcing a lower bridge ID than D1's. The switches hold a new election and the attacker wins. With one cable, that mostly causes disruption: every change of topology costs a reconvergence and extra flooding. An attacker connected to <em>two</em> switches can do worse, and sit in the middle of the traffic between them. The mitigation is <strong>BPDU Guard</strong> on every access port: a port with nothing but hosts on it should never hear a BPDU, so if it does, the switch shuts it.</p>
+    <div class="teach-note callback">
+      <span class="label">Session 4 callback</span>
+      Session 4 showed the PortFast and BPDU Guard commands as syntax, and said they'd be used in Session 9. This is the attack they're for.
+    </div>
+        <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · VLAN 10 on a normal day</span></div>
+      <div class="terminal-body"><span class="prompt">S1#</span> <span class="cmd">show spanning-tree vlan 10</span>
+<span class="out">VLAN0010</span>
+<span class="out">  Spanning tree enabled protocol rstp</span>
+<span class="out">  Root ID    Priority    24586</span>
+<span class="out">             Address     00D0.97CC.00D1</span>
+<span class="out">             Cost        3</span>
+<span class="out">             Port        28(Port-channel2)</span>
+<span class="out">             Hello Time  2 sec  Max Age 20 sec  Forward Delay 15 sec</span>
+<span class="out">  Bridge ID  Priority    28682  (priority 28672 sys-id-ext 10)</span>
+<span class="out">             Address     0060.47BB.0011</span>
+<span class="out">             Hello Time  2 sec  Max Age 20 sec  Forward Delay 15 sec</span>
+<span class="out">             Aging Time  20</span>
+<span class="out">Interface        Role Sts Cost      Prio.Nbr Type</span>
+<span class="out">---------------- ---- --- --------- -------- --------------------------------</span>
+<span class="out">Fa0/1            Desg FWD 19        128.1    P2p</span>
+<span class="out">Po1              Desg FWD 9         128.27   P2p</span>
+<span class="out">Po2              Root FWD 3         128.28   P2p</span></div>
+    </div>
+    <div class="teach-note warn">
+      <span class="label">Illustration</span>
+      Illustration: what an attack would look like. Packet Tracer doesn&#x27;t run it.
+    </div>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · a laptop on F0/5 claims to be the root</span></div>
+      <div class="terminal-body"><span class="prompt">S1#</span> <span class="cmd">show spanning-tree vlan 10</span>
+<span class="out">VLAN0010</span>
+<span class="out">  Spanning tree enabled protocol rstp</span>
+<span class="hl">  Root ID    Priority    10</span>
+<span class="hl">             Address     0040.0BAD.0005</span>
+<span class="out">             Cost        19</span>
+<span class="hl">             Port        5(FastEthernet0/5)</span>
+<span class="out">             Hello Time  2 sec  Max Age 20 sec  Forward Delay 15 sec</span>
+<span class="out">  Bridge ID  Priority    28682  (priority 28672 sys-id-ext 10)</span>
+<span class="out">             Address     0060.47BB.0011</span>
+<span class="out">             Hello Time  2 sec  Max Age 20 sec  Forward Delay 15 sec</span>
+<span class="out">             Aging Time  20</span>
+<span class="out">Interface        Role Sts Cost      Prio.Nbr Type</span>
+<span class="out">---------------- ---- --- --------- -------- --------------------------------</span>
+<span class="out">Fa0/1            Desg FWD 19        128.1    P2p</span>
+<span class="hl">Fa0/5            Root FWD 19        128.5    P2p</span>
+<span class="out">Po1              Desg FWD 9         128.27   P2p</span>
+<span class="hl">Po2              Desg FWD 3         128.28   P2p</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong>Priority 0, plus VLAN 10&#x27;s extended system ID, is 10</strong>: lower than D1&#x27;s 24586, so every switch in VLAN 10 accepts the laptop as root.</li>
+      <li><strong>What moves:</strong> S1&#x27;s root port moves from Po2 to F0/5, a desk port. D1, the old root, now reaches the root through Po2 (cost 3 + 19 = 22). S2 keeps Po3 as its root port (22 + 3 = 25, against 19 + 9 = 28 through Po1). The links between the switches barely change.</li>
+      <li><strong>With one cable, the fake root mostly causes disruption:</strong> every topology change shortens MAC aging and causes extra flooding, and repeated changes make the network unstable. To sit in the middle of traffic, as NetAcad describes, the attacker would need to be connected to <em>two</em> switches. PC-A&#x27;s traffic doesn&#x27;t flow through F0/5 here.</li>
+      <li><strong>The hole is a live access port that listens to BPDUs.</strong> BPDU Guard would shut F0/5 at the first BPDU, before any election.</li>
+    </ul>
+
+  </section>
+
+  <!-- CDP -->
+  <section id="cdp">
+    <div class="section-head">
+      <p class="kicker">Module 10.5</p>
+      <h2>CDP reconnaissance</h2>
+      <p>Before attacking, an attacker looks around. Cisco Discovery Protocol does a lot of the looking for them.</p>
+    </div>
+    <p><strong>CDP</strong> is on by default on every Cisco device and every port. It announces the device's name, IP address, model, IOS version, capabilities and VLAN every 60 seconds, unencrypted and unauthenticated. Administrators use it to map and troubleshoot a network. So can anyone who captures one frame on an access port.</p>
+        <p>Here&#x27;s what S1 knows about S2 from CDP. Every CDP-enabled port sends the same kind of advertisement, desk ports included. A laptop plugged into F0/5 would receive S1&#x27;s every 60 seconds.</p>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · what one CDP frame tells anyone listening</span></div>
+      <div class="terminal-body"><span class="prompt">S1#</span> <span class="cmd">show cdp neighbors detail</span>
+<span class="out">-------------------------</span>
+<span class="hl">Device ID: S2</span>
+<span class="out">Entry address(es):</span>
+<span class="hl">  IP address: 192.168.99.12</span>
+<span class="hl">Platform: cisco WS-C2960-24TT-L,  Capabilities: Switch IGMP</span>
+<span class="out">Interface: FastEthernet0/23,  Port ID (outgoing port): FastEthernet0/23</span>
+<span class="out">Holdtime : 171 sec</span>
+
+<span class="out">Version :</span>
+<span class="hl">Cisco IOS Software, C2960 Software (C2960-LANBASEK9-M), Version 15.0(2)SE4, RELEASE SOFTWARE (fc1)</span>
+<span class="out">Technical Support: http://www.cisco.com/techsupport</span>
+<span class="out">Copyright (c) 1986-2013 by Cisco Systems, Inc.</span>
+<span class="out">Compiled Wed 26-Jun-13 02:49 by prod_rel_team</span>
+
+<span class="out">advertisement version: 2</span>
+<span class="out">VTP Management Domain: &#x27;&#x27;</span>
+<span class="hl">Native VLAN: 900</span>
+<span class="out">Duplex: full</span>
+<span class="out">Management address(es):</span>
+<span class="out">  IP address: 192.168.99.12</span>
+
+<span class="out">-------------------------</span>
+<span class="out">Device ID: S2</span>
+<span class="out">...</span>
+<span class="out">Interface: FastEthernet0/24,  Port ID (outgoing port): FastEthernet0/24</span>
+<span class="out">...</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong>Read it as an intruder would.</strong> The <strong>management IP</strong> (VLAN 99 has no hosts on purpose, and CDP hands its address to a stranger anyway). The exact <strong>model and IOS version</strong>, to look up known weaknesses. The <strong>VLAN</strong>: on a desk port this field carries the port&#x27;s access VLAN; on a trunk, the native VLAN.</li>
+      <li><strong>CDP isn&#x27;t really a broadcast.</strong> It goes every 60 seconds to a multicast address, <code>01:00:0C:CC:CC:CC</code>, that every Cisco device listens for. Switches flood it, so the effect is the same: anyone on the port can read it. Receivers keep it for a 180-second holdtime, which is why <code>Holdtime</code> counts down.</li>
+      <li><strong>S2 appears twice</strong>, once per cable of Po1. CDP runs on each physical port, not on the port-channel: to STP the bundle is one link, to CDP it&#x27;s two cables.</li>
+    </ul>
+
+        <p>The fix is to stop advertising where strangers can listen. These are Module 10&#x27;s commands. HQ doesn&#x27;t change today; Session 9 turns CDP off on the desk ports along with everything else.</p>
+    <div class="terminal">
+      <div class="terminal-header"><span class="terminal-dot r"></span><span class="terminal-dot y"></span><span class="terminal-dot g"></span><span class="terminal-title">S1 · CDP and LLDP off (the commands, not applied at HQ today)</span></div>
+      <div class="terminal-body"><span class="comment">! Per port: stop CDP on the desk ports only (the trunks keep it)</span>
+<span class="prompt">S1(config)#</span> <span class="cmd">interface range f0/1 - 20</span>
+<span class="prompt">S1(config-if-range)#</span> <span class="hl">no cdp enable</span>
+<span class="prompt">S1(config-if-range)#</span> <span class="cmd">end</span>
+<span class="prompt">S1#</span> <span class="cmd">show cdp interface f0/5</span>
+<span class="prompt">S1#</span>
+<span class="comment">!</span>
+<span class="comment">! Globally: CDP off on every port of the switch</span>
+<span class="prompt">S1#</span> <span class="cmd">configure terminal</span>
+<span class="prompt">S1(config)#</span> <span class="hl">no cdp run</span>
+<span class="prompt">S1(config)#</span> <span class="cmd">end</span>
+<span class="prompt">S1#</span> <span class="cmd">show cdp</span>
+<span class="out">% CDP is not enabled</span>
+<span class="comment">!</span>
+<span class="comment">! LLDP, the IEEE standard equivalent</span>
+<span class="prompt">S1#</span> <span class="cmd">configure terminal</span>
+<span class="prompt">S1(config)#</span> <span class="cmd">interface range f0/1 - 20</span>
+<span class="prompt">S1(config-if-range)#</span> <span class="cmd">no lldp transmit</span>
+<span class="prompt">S1(config-if-range)#</span> <span class="cmd">no lldp receive</span>
+<span class="prompt">S1(config-if-range)#</span> <span class="cmd">exit</span>
+<span class="prompt">S1(config)#</span> <span class="cmd">no lldp run</span></div>
+    </div>
+    <ul class="obj-list">
+      <li><strong>An empty <code>show cdp interface f0/5</code> is the proof:</strong> the command only lists ports with CDP on. <code>cdp enable</code> and <code>cdp run</code> undo it.</li>
+      <li><strong>Per port is the recommendation.</strong> <code>no cdp run</code> goes further, and costs things: the native VLAN mismatch warning from Session 2 comes from CDP; a Cisco IP phone learns its voice VLAN through CDP; and <code>show cdp neighbors</code> is a handy cabling check.</li>
+      <li><strong>LLDP</strong> is the open-standard version of CDP, and it leaks the same kind of information. On Catalyst switches it&#x27;s off by default, so <code>no lldp run</code> mostly makes sure. Per port, sending and listening are separate: it takes both lines to stop it.</li>
+    </ul>
+
+  </section>
+
+  <!-- EXPOSURE MAP -->
+  <section id="exposure">
+    <div class="section-head">
+      <p class="kicker">Walk the network</p>
+      <h2>Exposure map: where HQ stands tonight</h2>
+      <p>Every attack on this page needs a way in. Here's which ones the network as built already stops, and which are still open until Session 9.</p>
+    </div>
+    <div class="wanted">
+      <span class="threat">THREAT LEVEL: INSIDER</span>
+      <p class="eyebrow">CASE FILE D-06</p>
+      <h3>The Impostor</h3>
+      <p class="mo">Wears whatever badge the network will accept. Floods a switch with thousands of made-up MAC addresses until it can't learn real ones, and starts flooding their frames to every port in the VLAN. Answers DHCP requests before the real server can, handing out its own address as the gateway. Tells every host on the VLAN that the gateway's IP address now lives at its MAC. Claims to be the root bridge. It needs no password and forces no lock: it just uses the trust a switch gives to anything plugged into it.</p>
+      <p class="tell"><strong>Tell:</strong> one access port with hundreds of MAC addresses in <code>show mac address-table</code>; a gateway whose MAC changed in a PC's <code>arp -a</code>; a PC with a lease from an address range nobody configured; a root bridge in <code>show spanning-tree</code> that isn't D1.</p>
+      <p class="xref">See also: <a href="#l2threats">Attacks and their mitigations</a> · <a href="#attackdrill">Name that attack</a></p>
+    </div>
+    <div class="teach-note">
+      <span class="label">Debrief</span>
+      The Impostor's tricks all start the same way. What does every one of them need, and why does HQ's design already stop VLAN hopping and double-tagging, but none of the others? <em>(Each one needs a live port to plug into. VLAN hopping needs a port that will negotiate a trunk, and double-tagging needs an access port in the native VLAN. HQ has neither: every access port is static, and VLAN 900 has no access ports. The other attacks work through an ordinary access port, which is exactly what a desk jack is. Stopping them means the switch has to check what arrives on its access ports: Session 9.)</em>
+    </div>
+        <table class="spec">
+      <thead><tr><th>Where</th><th>Open to, tonight</th><th>Already stopped by design</th><th>Session 9 fix</th></tr></thead>
+      <tbody>
+        <tr><td><strong>S1 and S2 host ports in use</strong> (PC-A, PC-C, PC-D)</td><td>MAC flooding, DHCP spoofing and starvation, ARP poisoning, MAC and IP spoofing, STP manipulation, CDP reconnaissance</td><td>VLAN hopping: they&#x27;re static access ports</td><td>Port security, BPDU Guard, CDP off; DHCP snooping and DAI treat them as untrusted</td></tr>
+        <tr><td><strong>S1 and S2 unused ports inside the VLAN 10 and 30 ranges</strong></td><td>The same list. <strong>This is the main hole:</strong> an empty desk jack is live in a user VLAN. It&#x27;s why every illustration on this page uses S1 F0/5.</td><td>VLAN hopping: static access</td><td><strong>Park them</strong>: VLAN 999, shut, as Session 2 promised</td></tr>
+        <tr><td><strong>Parked ports</strong> (S1 and S2 F0/21–22, D1&#x27;s spares)</td><td>Nothing while they&#x27;re shut</td><td>Shut, in VLAN 999: no gateway, no hosts</td><td>Already done</td></tr>
+        <tr><td><strong>Trunks</strong> Po1, Po2, Po3</td><td>Not reachable from a desk. They carry a flood onward if a table overflows.</td><td>Static trunks with <code>nonegotiate</code>: no DTP. Native VLAN 900 with no hosts: no double-tagging.</td><td>Trusted for DHCP snooping and DAI; CDP stays on</td></tr>
+        <tr><td><strong>D1</strong></td><td>No live access ports</td><td>Every unused port parked</td><td>Trust decisions: it&#x27;s the relay and the gateway</td></tr>
+        <tr><td><strong>Management</strong> (VLAN 99, SSH)</td><td>CDP on desk ports gives away <code>192.168.99.11</code> and <code>.12</code></td><td>A management VLAN with no hosts; SSH with <code>login local</code></td><td>CDP off on desk ports</td></tr>
+        <tr><td><strong>Shipping: S3</strong></td><td>DHCP spoofing (the home router by a LAN port, Session 6&#x27;s warning), a stray router&#x27;s RAs (Session 7&#x27;s warning), ARP poisoning, MAC flooding, STP, CDP. S3&#x27;s management address shares VLAN 20 with the users.</td><td>Not shown on these pages yet</td><td>The same features, and every unused port parked</td></tr>
+      </tbody>
+    </table>
+
+  </section>
+
+  <!-- ATTACK DRILL -->
+  <section id="attackdrill">
+    <div class="section-head">
+      <p class="kicker">Drill</p>
+      <h2>Name that attack</h2>
+      <p>A symptom from the NOC's logs. Which attack is it?</p>
+    </div>
+    <div class="teach-note callback">
+      <span class="label">CCNA 1 callback</span>
+      <a href="https://kevinsays.github.io/131/">CCNA 1</a>'s "name that attack" sorted attacks by kind: reconnaissance, access, denial of service. This one goes a layer down: every attack here lives at Layer 2.
+    </div>
+    <div class="tool" id="atkTool">
+      <p class="tool-title">Drill · Name that attack</p>
+      <div class="sorter-case" id="atkCase"></div>
+      <div class="sorter-btns" id="atkBtns"></div>
+      <div class="tool-out" id="atkOut"></div>
+      <div class="toolbar" style="margin:12px 0 0;">
+        <button class="btn" id="atkNext">Next symptom</button>
+        <span id="atkScore" style="font-family:var(--mono); font-size:.85rem; opacity:.75;"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- MISTAKES -->
+  <section id="mistakes">
+    <div class="section-head">
+      <p class="kicker">Watch for this</p>
+      <h2>Common Module 10 mistakes</h2>
+      <p>Most Module 10 mistakes are matching an attack to the wrong defence, or thinking a defence covers more than it does.</p>
+    </div>
+        <h3 class="sub">1 · VLAN hopping vs double-tagging</h3>
+    <p>Two different attacks. Hopping <strong>forms a trunk</strong> with DTP and works both ways. Double-tagging hides a second tag behind the <strong>native VLAN</strong> and only goes one way.</p>
+    <h3 class="sub">2 · ARP poisoning vs MAC spoofing</h3>
+    <p>ARP poisoning changes the <strong>hosts&#x27; ARP caches</strong>; the switch&#x27;s MAC table stays right. MAC spoofing changes the <strong>switch&#x27;s MAC table</strong>; the hosts&#x27; caches stay right. Ask which table is lying.</p>
+    <h3 class="sub">3 · DHCP starvation vs spoofing</h3>
+    <p>Starvation empties the real server&#x27;s pool (its tell is on the server). Spoofing adds a fake server (its tell is on the client). One often follows the other.</p>
+    <h3 class="sub">4 · Thinking MAC flooding reaches every VLAN</h3>
+    <p>The flood stays inside each VLAN. An attacker in VLAN 10 sees VLAN 10&#x27;s traffic, not VLAN 30&#x27;s.</p>
+    <h3 class="sub">5 · One fix for every attack</h3>
+    <p>Each mitigation has a target: port security for flooding, DHCP snooping for DHCP, DAI for ARP, IPSG for address spoofing, BPDU Guard for STP. DHCP starvation is the one with two: snooping and port security.</p>
+    <h3 class="sub">6 · Mixing up the 802.1X roles</h3>
+    <p>The <strong>supplicant</strong> is the client, the <strong>authenticator</strong> is the switch or access point, and the <strong>authentication server</strong> (usually RADIUS) decides. The switch passes credentials along; it doesn&#x27;t judge them.</p>
+    <h3 class="sub">7 · "Parked" doesn&#x27;t mean "safe from everything"</h3>
+    <p>Parking protects the ports nobody uses. The attacks on this page work just as well through a port somebody <em>does</em> use. Session 9 needs both: parking for the empty ports, port security and the rest for the live ones.</p>
+
+  </section>
+
+  <!-- WHAT WORKS NOW -->
+  <section id="reach">
+    <div class="section-head">
+      <p class="kicker">End of session</p>
+      <h2>What works now, and what doesn't</h2>
+      <p>Nothing changed today. What's new is knowing what the network can't yet survive.</p>
+    </div>
+        <table class="spec">
+      <thead><tr><th>Test</th><th>Result</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Everything that worked at the end of Session 7</td><td><strong>Works</strong></td><td>No change today</td></tr>
+        <tr><td>A laptop on an empty HQ desk jack</td><td><strong>Gets a VLAN 10 or 30 address</strong></td><td>The unused ports inside those ranges are live. Session 9 parks them.</td></tr>
+        <tr><td>A laptop trying to trunk at HQ</td><td>No</td><td>Every port is static access, a static trunk with <code>nonegotiate</code>, routed, or parked</td></tr>
+        <tr><td>Double-tagging at HQ</td><td>No</td><td>The native VLAN, 900, has no access ports</td></tr>
+        <tr><td>MAC flooding, rogue DHCP, ARP poisoning, a fake root bridge</td><td><strong>Nothing stops them</strong></td><td>Session 9</td></tr>
+        <tr><td>CDP on desk ports</td><td><strong>On</strong>, advertising every switch&#x27;s management address</td><td>Session 9</td></tr>
+      </tbody>
+    </table>
+
+    <div class="teach-note preview">
+      <span class="label">Coming up in Session 9</span>
+      Module 11 locks the doors: port security on every access port, every unused port parked, DHCP snooping with trusted and untrusted ports, Dynamic ARP Inspection, and PortFast with BPDU Guard. Case File D-06 stays open until then.
+    </div>
+  </section>
+
+  <!-- THE TICKET -->
+  <section id="ticket">
+    <div class="section-head">
+      <p class="kicker">Recurring segment</p>
+      <h2>The Ticket</h2>
+      <p>Turn it into steps before you open the answer.</p>
+    </div>
+        <div class="ticket-card">
+      <p class="tag">Ticket #141-08 · Priority: high · From: Front Desk</p>
+      <p>Since this morning, two PCs at the front desk can reach each other but not the internet or the file server. A third PC is fine. A visitor was using the spare desk by the window yesterday. We restarted everything and it didn&#x27;t help.</p>
+    </div>
+    <details class="solution"><summary>One way to break it down</summary><div class="solbody">
+      <ol>
+        <li><strong>Same subnet works, everything beyond it doesn&#x27;t:</strong> the problem is the gateway, or what the PCs <em>think</em> the gateway is.</li>
+        <li><strong>"We restarted everything"</strong> means every PC sent a fresh DHCP discover. If a rogue server answered first, the restarted PCs have its settings. Check <code>ipconfig /all</code>: is the address 192.168.10.x, is the gateway <code>192.168.10.1</code>, and is the DHCP server R1&#x27;s <code>10.0.0.9</code>? A lease from a server nobody configured is DHCP spoofing.</li>
+        <li>If the settings are right, check <code>arp -a</code>: does <code>192.168.10.1</code> map to D1&#x27;s real MAC, or to a MAC that also belongs to another address? That&#x27;s ARP poisoning.</li>
+        <li><strong>Find the port:</strong> look up the rogue MAC in S1&#x27;s and S2&#x27;s <code>show mac address-table</code>. Expect the spare desk&#x27;s jack, a live, unused port in VLAN 10.</li>
+        <li><strong>Tonight:</strong> shut that port, then renew the affected PCs (<code>ipconfig /release</code> and <code>/renew</code>, or <code>arp -d</code> for a poisoned cache).</li>
+        <li><strong>For good:</strong> park every unused port; DHCP snooping and DAI, with only the uplinks trusted. Session 9.</li>
+      </ol>
+    </div></details>
+
+  </section>
+
+  <!-- CHECKPOINT -->
+  <section id="checkpoint">
+    <div class="section-head">
+      <p class="kicker">Before Session 9</p>
+      <h2>Checkpoint: Module 10</h2>
+      <p>If you can do these cold, you're ready to configure switch security.</p>
+    </div>
+    <ul class="obj-list">
+      <li>DDoS, data breach and malware; what an NGFW, NAC (ISE), ESA and WSA each do; HIPS and AMP</li>
+      <li>The three As, local vs server-based AAA, and RADIUS and TACACS+ as the two server protocols</li>
+      <li>802.1X: supplicant, authenticator and authentication server</li>
+      <li>Why Layer 2 is the weak link, and the secure-management guidelines</li>
+      <li>Every attack category and its mitigation: port security, the trunk guidelines, DHCP snooping, DAI, IPSG, BPDU Guard, CDP off</li>
+      <li>How each attack works: MAC flooding, VLAN hopping, double-tagging (and why it only goes one way), DHCP starvation and spoofing, ARP spoofing and gratuitous ARP, MAC and IP spoofing, STP manipulation, CDP reconnaissance</li>
+      <li><code>no cdp run</code>, <code>no cdp enable</code>, <code>no lldp run</code>, <code>no lldp transmit</code> and <code>receive</code></li>
+    </ul>
+  </section>
+
+  <!-- FLASHCARDS -->
+  <section id="flashcards">
+    <div class="section-head">
+      <p class="kicker">Study</p>
+      <h2>Flashcards</h2>
+      <p>Click to flip. Double-click to mark as known.</p>
+    </div>
+    <div class="toolbar">
+      <button class="btn" id="shuffleBtn">Shuffle</button>
+      <button class="btn" id="resetKnownBtn">Reset progress</button>
+      <span id="cardProgress"></span>
+    </div>
+    <div class="card-grid" id="cardGrid"></div>
+  </section>
+
+  <!-- QUIZ -->
+  <section id="quiz">
+    <div class="section-head">
+      <p class="kicker">Check yourself</p>
+      <h2>Sample questions</h2>
+      <p>Pick an answer to see if you're right. Same style as the module-group exam.</p>
+    </div>
+    <div id="quizScore"></div>
+    <div id="quizList"></div>
+    <button class="btn" id="resetQuizBtn">Reset quiz</button>
+  </section>
+
+  <!-- EXAMPLES -->
+  <section id="examples">
+    <div class="section-head">
+      <p class="kicker">Applied</p>
+      <h2>Worked examples</h2>
+      <p>Think it through before you expand the answer.</p>
+    </div>
+        <div class="example">
+      <span class="tag">Flooding</span>
+      <h3>Could it see VLAN 30?</h3>
+      <p>Suppose an attacker on S1 F0/5 (VLAN 10) filled S1's MAC table, and then captured frames sent to PC-C after PC-C had been quiet for a while. Could it also capture PC-D's traffic in VLAN 30?</p>
+      <details class="solution"><summary>Show answer</summary><div class="solbody">
+        <p>No. Once PC-C's entry aged out, S1 couldn't learn it again while the table was full, so frames for PC-C became unknown unicasts and were flooded out every port in VLAN 10, including F0/5. VLAN 30's traffic floods too, because S1 can't learn there either, but only out VLAN 30's ports. Flooding never crosses into another VLAN. To see it, the attacker would need a port in VLAN 30, or a trunk.</p>
+      </div></details>
+    </div>
+    <div class="example">
+      <span class="tag">VLAN attacks</span>
+      <h3>Why can't double-tagging work at HQ?</h3>
+      <p>An attacker on a VLAN 10 port at HQ sends a frame with two 802.1Q tags: outer 10, inner 30. What happens?</p>
+      <details class="solution"><summary>Show answer</summary><div class="solbody">
+        <p>Nothing useful for the attacker. Double-tagging needs the attacker's access port to be in the <strong>trunk's native VLAN</strong>, so the first switch sends the frame across the trunk untagged and the hidden inner tag is the only one left. The attacker is in VLAN 10, and HQ's native VLAN is 900, which has no access ports at all. At most, the frame stays in VLAN 10 (many switches simply drop a tagged frame arriving on an access port). It can't reach VLAN 30.</p>
+      </div></details>
+    </div>
+    <div class="example">
+      <span class="tag">DHCP</span>
+      <h3>Starvation, then spoofing</h3>
+      <p>Why would an attacker run DHCP starvation <em>before</em> plugging in a rogue DHCP server?</p>
+      <details class="solution"><summary>Show answer</summary><div class="solbody">
+        <p>With the real server's pool empty, the real server can't answer new clients, so the rogue server's offers are the only ones they get. Starvation alone is a denial of service; with spoofing after it, the attacker controls every new client's gateway and DNS server.</p>
+      </div></details>
+    </div>
+    <div class="example">
+      <span class="tag">ARP</span>
+      <h3>Who sees the poisoned entry?</h3>
+      <p>An attacker in VLAN 30 sends gratuitous ARPs claiming 192.168.30.1. PC-C is in VLAN 10. Is PC-C's ARP cache poisoned?</p>
+      <details class="solution"><summary>Show answer</summary><div class="solbody">
+        <p>No. ARP is a broadcast, and broadcasts stay inside their VLAN. Only hosts in VLAN 30 hear the lie, and only they would send their gateway traffic to the attacker.</p>
+      </div></details>
+    </div>
+    <div class="example">
+      <span class="tag">Mitigation</span>
+      <h3>One attack, two answers</h3>
+      <p>Port security and DHCP snooping both appear in NetAcad's list against DHCP starvation. Why does each one help?</p>
+      <details class="solution"><summary>Show answer</summary><div class="solbody">
+        <p>Starvation comes from one port pretending to be thousands of clients. <strong>Port security</strong> limits how many MAC addresses that port may use, so the switch drops the made-up ones. <strong>DHCP snooping</strong> can rate-limit DHCP messages on untrusted ports, so one port can't send thousands of requests a second. (It also checks that each request's client MAC matches the frame's source, but a tool that fakes both passes that check.)</p>
+      </div></details>
+    </div>
+    <div class="example">
+      <span class="tag">CDP</span>
+      <h3>Off everywhere?</h3>
+      <p>A colleague suggests <code>no cdp run</code> on every switch at HQ. Why might that be too much?</p>
+      <details class="solution"><summary>Show answer</summary><div class="solbody">
+        <p>CDP is useful on links between Cisco devices: it warns about native VLAN mismatches and tells IP phones their voice VLAN. The risk is on <strong>edge ports</strong>, where users and attackers plug in. <code>no cdp enable</code> on the access ports closes the leak and keeps CDP where it helps.</p>
+      </div></details>
+    </div>
+
+  </section>
+
+  <!-- GLOSSARY -->
+  <section id="glossary">
+    <div class="section-head">
+      <p class="kicker">Reference</p>
+      <h2>Glossary &amp; index</h2>
+      <p>Every term from this session. Search, or jump by letter.</p>
+    </div>
+    <input type="text" id="glossarySearch" placeholder="Search terms…" aria-label="Search glossary">
+    <div class="alpha-nav" id="alphaNav"></div>
+    <dl class="glossary" id="glossaryList"></dl>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>IT141 · CCNA: Switching, Routing, and Wireless Essentials · Session 8 reference.</p>
+    <p class="license-note">© 2026 Zan Dick (<a href="https://github.com/KevinSays/osi-company-switching">KevinSays</a>), Mountwest Community &amp; Technical College · Content: <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/">CC BY-NC-SA 4.0</a> · Code: <a href="https://github.com/KevinSays/osi-company-switching/blob/main/LICENSE">MIT</a> · Cisco, NetAcad, CCNA and Packet Tracer are trademarks of Cisco; this site is not affiliated with or endorsed by Cisco.</p>
+  </div>
+</footer>
+<button id="backToTop" class="back-to-top" aria-label="Back to top" title="Back to top">↑</button>
+<script>
+  (function(){
+    /* ---- name that attack ---- */
+    const CASES = [
+      { s:"S1's MAC address table has no space left, and thousands of VLAN 10 entries are on F0/5, none of them a known device.", a:"MAC address flooding", w:"Thousands of made-up source MACs on one port, until the table is full." },
+      { s:"A laptop on one access port is receiving copies of unicast frames between two other VLAN 10 hosts, and S1 reports no MAC address space left.", a:"MAC address flooding", w:"A full table means unknown unicasts flood out every port in the VLAN, including the attacker's." },
+      { s:"On a factory-default 2960, a desk port nobody configured shows administrative mode dynamic auto and operational mode trunk.", a:"VLAN hopping", w:"The attacker's host spoke DTP and the port agreed to trunk. Now it can reach every VLAN on the switch." },
+      { s:"After an unknown device was connected, someone at a desk could send frames tagged for VLAN 30 and VLAN 99 straight through the switch, and get replies, with no router involved.", a:"VLAN hopping", w:"Tagging into several VLANs, with replies, needs a trunk: VLAN hopping. Double-tagging only goes one way." },
+      { s:"A frame with two 802.1Q tags entered on an access port in the trunk's native VLAN and reached a host in another VLAN. The host's reply never came back.", a:"VLAN double-tagging", w:"The first switch stripped the native-VLAN tag; the next switch read the hidden one. One-way only." },
+      { s:"R1's show ip dhcp binding lists every address in the VLAN 30 pool, leased to hardware addresses that match no PC in the building. New PCs get no offer.", a:"DHCP starvation", w:"The tell is on the server: an empty pool, leased to made-up MACs." },
+      { s:"A PC on 192.168.20.0/24 receives 192.168.0.100 with gateway 192.168.0.1, and ipconfig /all lists a DHCP server that isn't R2.", a:"DHCP spoofing", w:"A rogue server answered first. The tell is on the client: settings from a server nobody configured." },
+      { s:"PC-C's arp -a lists 192.168.10.1 with a MAC that isn't D1's, and the same MAC appears against another host's IP. S1's MAC table is unchanged.", a:"ARP spoofing/poisoning", w:"The hosts' ARP caches are lying; the switch's MAC table is right." },
+      { s:"Hosts keep receiving ARP replies nobody asked for, claiming the gateway's IP is at a laptop's MAC.", a:"ARP spoofing/poisoning", w:"Gratuitous ARPs with a false mapping: ARP spoofing, which poisons the caches." },
+      { s:"PC-A's MAC address keeps moving between S1 F0/1 and F0/5 in the MAC table, many times a minute. Nobody's ARP cache has changed.", a:"MAC address spoofing", w:"The switch's MAC table is lying; the hosts' ARP caches are right." },
+      { s:"PC-C receives packets with source IP 192.168.10.10, PC-A's address, but with the laptop's own source MAC. No MAC table or ARP entry changed.", a:"IP address spoofing", w:"Only the source IP is borrowed. Nothing in the MAC table or ARP has to change." },
+      { s:"show spanning-tree vlan 10 on every HQ switch shows a root bridge that is none of the three switches, and S1's root port is F0/5.", a:"STP manipulation", w:"BPDUs with a lower bridge ID from a desk port won the election." },
+      { s:"A device on a desk port sent BPDUs with priority 0, and the switches recalculated the tree around it.", a:"STP manipulation", w:"Nothing in STP checks who sends a BPDU. BPDU Guard would have shut the port." },
+      { s:"A laptop on a desk port captured a frame sent to 01:00:0C:CC:CC:CC containing the switch's IOS version, model and management IP.", a:"CDP reconnaissance", w:"That's a CDP advertisement: unencrypted, unauthenticated, sent on every port where CDP is on." },
+    ];
+    const caseEl = document.getElementById('atkCase'), btns = document.getElementById('atkBtns'),
+          out = document.getElementById('atkOut'), scoreEl = document.getElementById('atkScore');
+    if (!caseEl || !CASES.length) return;
+    const ALL = [...new Set(CASES.map(c => c.a))];
+    let right = 0, done = 0, n = 0, last = -1;
+    function show(){
+      n++;
+      let i; do { i = Math.floor(Math.random()*CASES.length); } while (CASES.length > 1 && i === last);
+      last = i;
+      const c = CASES[i];
+      const wrong = ALL.filter(a => a !== c.a).sort(() => Math.random() - .5).slice(0, 3);
+      const opts = [c.a, ...wrong].sort(() => Math.random() - .5);
+      caseEl.innerHTML = `<span class="count">Symptom ${n}</span>${c.s}`;
+      out.innerHTML = ''; btns.innerHTML = ''; delete btns.dataset.done;
+      opts.forEach(k => {
+        const el = document.createElement('button');
+        el.className = 'choice'; el.textContent = k;
+        el.addEventListener('click', () => {
+          if (btns.dataset.done) return;
+          btns.dataset.done = '1'; done++;
+          if (k === c.a) right++;
+          Array.from(btns.children).forEach(x => {
+            x.disabled = true;
+            if (x.textContent === c.a) x.classList.add('correct');
+            else if (x.textContent === k) x.classList.add('incorrect');
+          });
+          out.innerHTML = `<div class="row"><b>${k === c.a ? 'Right' : 'Not quite: ' + c.a}</b><span>${c.w}</span></div>`;
+          scoreEl.textContent = `${right} / ${done} right`;
+        });
+        btns.appendChild(el);
+      });
+    }
+    document.getElementById('atkNext').addEventListener('click', show);
+    show();
+  })();
+  const TERMS = [
+    {t:"AAA", d:"Authentication, authorization and accounting: who you are, what you may do, and a record of what you did. The framework for controlling access to devices and networks."},
+    {t:"Accounting", d:"The third A: collecting and logging what a user did (times, commands, bytes) for auditing, billing, troubleshooting or evidence."},
+    {t:"AMP", d:"Advanced Malware Protection: Cisco's malware detection and blocking, on endpoints and built into firewalls."},
+    {t:"ARP poisoning", d:"The result of ARP spoofing: hosts' ARP caches now map an IP address (usually the gateway's) to the attacker's MAC address."},
+    {t:"ARP spoofing", d:"Sending false ARP replies, often gratuitous, that map someone else's IP address to the attacker's MAC. Mitigated by Dynamic ARP Inspection."},
+    {t:"Authentication", d:"The first A: checking who a user or device is, by username and password, certificate or similar, before allowing access."},
+    {t:"Authentication server", d:"The 802.1X role that decides whether a client may join the network. Usually a RADIUS server."},
+    {t:"Authenticator", d:"The 802.1X role played by the switch (or wireless access point): it asks the client for its identity, passes it to the authentication server, and opens the port only if the server says yes."},
+    {t:"Authorization", d:"The second A: deciding, automatically after login, which commands or services an authenticated user may use."},
+    {t:"BPDU Guard", d:"A switch feature that shuts down an access port as soon as a BPDU arrives on it. The mitigation for STP manipulation. Configured in Session 9."},
+    {t:"CDP", d:"Cisco Discovery Protocol: Cisco's Layer 2 discovery protocol, on by default. It advertises a device's name, IP address, model, IOS version and native VLAN, unencrypted and unauthenticated."},
+    {t:"CDP reconnaissance", d:"Capturing CDP advertisements to learn a network's devices, addresses and software versions before attacking it."},
+    {t:"Data breach", d:"An attack in which servers or hosts are broken into to steal confidential data."},
+    {t:"DDoS", d:"Distributed denial of service: many compromised devices (zombies) attack one target at once, to slow or stop access to it."},
+    {t:"DHCP snooping", d:"A switch feature that blocks DHCP server messages on untrusted ports and rate-limits requests. The mitigation for DHCP spoofing and starvation. Configured in Session 9."},
+    {t:"DHCP spoofing", d:"A rogue DHCP server answers clients with false settings: a wrong gateway (man-in-the-middle), a wrong DNS server, or a wrong address (denial of service)."},
+    {t:"DHCP starvation", d:"Leasing every address in a DHCP pool with requests from made-up MAC addresses, so real clients get none. A denial of service, often before DHCP spoofing."},
+    {t:"Dynamic ARP Inspection (DAI)", d:"A switch feature that checks ARP messages against known IP-to-MAC bindings and drops forged ones. The mitigation for ARP spoofing and poisoning. Configured in Session 9."},
+    {t:"ESA", d:"Email Security Appliance: Cisco's appliance that inspects email (SMTP), blocks known threats and bad links, and encrypts outgoing mail."},
+    {t:"Gratuitous ARP", d:"An ARP reply nobody asked for. Honest devices use it to announce an address (a new SVI, a new HSRP active router); attackers use it for ARP spoofing."},
+    {t:"HIPS", d:"Host-based intrusion prevention system: software on an endpoint that detects and blocks attacks against that host."},
+    {t:"IEEE 802.1X", d:"Port-based access control: a switch port or access point lets only 802.1X authentication traffic through until the device on it has proved its identity."},
+    {t:"IP address spoofing", d:"Using another host's IP address, or a made-up one, as the source of your traffic. Mitigated by IP Source Guard."},
+    {t:"IP Source Guard (IPSG)", d:"A switch feature that drops traffic whose source IP or MAC address doesn't match what's known for that port. The mitigation for address spoofing."},
+    {t:"ISE", d:"Identity Services Engine: Cisco's network access control (NAC) appliance, providing AAA and access policies across users and devices."},
+    {t:"login local", d:"Line command that makes the console or vty lines check usernames and passwords against the device's local database (username … secret)."},
+    {t:"MAC address flooding", d:"Sending frames from thousands of made-up source MACs until the switch's MAC table is full, so the switch can't learn real addresses and floods frames for unknown destinations out every port in the VLAN. Mitigated by port security."},
+    {t:"MAC address spoofing", d:"Setting a host's MAC to a victim's, so the switch moves the victim's MAC table entry, and its frames, to the attacker's port. Mitigated by IP Source Guard."},
+    {t:"Malware", d:"Malicious software that infects hosts. Ransomware, which encrypts data until a ransom is paid, is one kind."},
+    {t:"NAC", d:"Network access control: AAA services and access policies that decide which users and devices may use the network, and how."},
+    {t:"NGFW", d:"Next-generation firewall: stateful inspection plus application control, an NGIPS, AMP and URL filtering."},
+    {t:"NGIPS", d:"Next-generation intrusion prevention system: inspects traffic for attacks and blocks them. Part of an NGFW."},
+    {t:"no cdp enable", d:"Interface command that turns CDP off on that port only. Used on edge ports that face users or untrusted devices."},
+    {t:"no cdp run", d:"Global command that turns CDP off on the whole device. cdp run turns it back on."},
+    {t:"no lldp run", d:"Global command that turns LLDP off on the whole device."},
+    {t:"no lldp transmit / receive", d:"Interface commands that stop a port sending, or listening to, LLDP advertisements."},
+    {t:"Port security", d:"A switch feature that limits how many, and which, MAC addresses may use a port. The mitigation for MAC flooding (and DHCP starvation). Configured in Session 9."},
+    {t:"RADIUS", d:"Remote Authentication Dial-In User Service: an open-standard protocol a router, switch or access point uses to ask a central AAA server about a user. The usual 802.1X authentication server."},
+    {t:"STP manipulation", d:"Sending BPDUs with a low bridge ID so an attacker's host wins the root bridge election and the tree is rebuilt around it. With one connection that mostly causes disruption; connected to two switches, the attacker can sit in the path between them. Mitigated by BPDU Guard."},
+    {t:"Supplicant", d:"The 802.1X role played by the client device: it runs 802.1X software and proves its identity."},
+    {t:"TACACS+", d:"Terminal Access Controller Access-Control System Plus: a protocol, developed by Cisco, that devices use to ask a central AAA server about a user. Mostly used for logins to network devices."},
+    {t:"VLAN double-tagging", d:"Sending a frame with two 802.1Q tags, the outer one the native VLAN, so the first switch strips it and the second delivers the frame into the VLAN in the inner tag. One-way only."},
+    {t:"VLAN hopping", d:"An attacker's host pretends to be a switch and negotiates a trunk with DTP, gaining access to every VLAN on it."},
+    {t:"WSA", d:"Web Security Appliance: Cisco's appliance that filters and inspects web traffic: URL filtering, malware scanning and application control."},
+  ];
+  const QUIZ = [
+    { q:"Which AAA function records the commands a user typed on a router?",
+      choices:["Authentication", "Authorization", "Accounting", "Auditing"], correct:2,
+      explain:"Accounting collects and logs what users did, including commands, for auditing and troubleshooting." },
+    { q:"In 802.1X, which device acts as the authenticator?",
+      choices:["The PC", "The switch", "The RADIUS server", "The router's default gateway"], correct:1,
+      explain:"The switch (or a wireless access point) is the go-between: it passes the supplicant's credentials to the authentication server, which decides." },
+    { q:"Which two protocols does a router use to talk to a central AAA server?",
+      choices:["SSH and Telnet", "RADIUS and TACACS+", "CDP and LLDP", "DHCP and DNS"], correct:1,
+      explain:"Server-based AAA uses RADIUS or TACACS+." },
+    { q:"A switch's MAC address table is full of made-up addresses. What does the switch do with a frame for a real host it can no longer learn?",
+      choices:["Drops it", "Floods it out every port in the VLAN", "Sends it to the default gateway", "Shuts the port"], correct:1,
+      explain:"The destination is now an unknown unicast, so the switch floods it within the VLAN, where the attacker can capture it." },
+    { q:"Which feature mitigates MAC address flooding?",
+      choices:["DHCP snooping", "Port security", "BPDU Guard", "Dynamic ARP Inspection"], correct:1,
+      explain:"Port security limits how many MAC addresses a port may learn." },
+    { q:"An attacker's laptop negotiates a trunk with a switch port. What is the attack?",
+      choices:["VLAN double-tagging", "VLAN hopping", "STP manipulation", "MAC address spoofing"], correct:1,
+      explain:"VLAN hopping uses DTP to form a trunk, giving access to every VLAN on it." },
+    { q:"A VLAN double-tagging attack only works if the attacker's access port is in which VLAN?",
+      choices:["VLAN 1", "The management VLAN", "The trunk's native VLAN", "The target VLAN"], correct:2,
+      explain:"The first switch strips the outer tag only because it matches the native VLAN. That's why HQ's native VLAN, 900, has no access ports." },
+    { q:"A rogue DHCP server hands clients its own address as their default gateway. What is the attacker setting up?",
+      choices:["A denial of service", "A man-in-the-middle attack", "VLAN hopping", "MAC flooding"], correct:1,
+      explain:"With the attacker as their gateway, clients send all their off-subnet traffic through it." },
+    { q:"Which attack leases every address in a DHCP pool using made-up MAC addresses?",
+      choices:["DHCP spoofing", "DHCP starvation", "ARP poisoning", "MAC address spoofing"], correct:1,
+      explain:"DHCP starvation exhausts the pool so real clients get nothing." },
+    { q:"Which feature mitigates DHCP spoofing?",
+      choices:["Port security", "DHCP snooping", "IP Source Guard", "BPDU Guard"], correct:1,
+      explain:"DHCP snooping drops DHCP server messages arriving on untrusted ports." },
+    { q:"Which message does an attacker use to poison hosts' ARP caches without waiting to be asked?",
+      choices:["ARP request", "Gratuitous ARP", "DHCPDISCOVER", "BPDU"], correct:1,
+      explain:"A gratuitous ARP is an unsolicited reply; hosts update their caches from it." },
+    { q:"Which feature mitigates ARP spoofing and poisoning?",
+      choices:["Dynamic ARP Inspection", "Port security", "DHCP snooping", "CDP"], correct:0,
+      explain:"DAI checks ARP messages against known IP-to-MAC bindings and drops forged ones." },
+    { q:"Which feature mitigates MAC and IP address spoofing?",
+      choices:["DAI", "IP Source Guard", "BPDU Guard", "802.1Q"], correct:1,
+      explain:"IP Source Guard drops traffic whose source addresses don't match what's known for that port." },
+    { q:"An attacker's host sends BPDUs with priority 0. What mitigates this?",
+      choices:["PortFast", "BPDU Guard on access ports", "DHCP snooping", "no cdp run"], correct:1,
+      explain:"BPDU Guard shuts an access port the moment a BPDU arrives. PortFast alone doesn't stop BPDUs." },
+    { q:"Which information does CDP advertise that's useful to an attacker?",
+      choices:["Users' passwords", "The device's IOS version and IP address", "The DHCP pool", "The ARP cache"], correct:1,
+      explain:"CDP sends the device name, IP address, model, IOS version and native VLAN in the clear." },
+    { q:"Which command turns CDP off on one interface?",
+      choices:["no cdp run", "no cdp enable", "no lldp run", "cdp disable"], correct:1,
+      explain:"no cdp enable is the interface command; no cdp run turns CDP off for the whole device." },
+    { q:"Which appliance inspects email for threats?",
+      choices:["WSA", "ESA", "NGIPS", "ISE"], correct:1,
+      explain:"The Email Security Appliance watches SMTP; the Web Security Appliance watches web traffic." },
+  ];
+</script>
